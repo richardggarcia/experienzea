@@ -1,4 +1,4 @@
-# Agro MVP
+# OmbuLedger MVP
 
 Plataforma que conecta productores agropecuarios locales con consumidores, con microfinanciamiento usando collateral real.
 

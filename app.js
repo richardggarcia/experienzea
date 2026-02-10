@@ -1,5 +1,5 @@
 /* ============================================
-   AGRO - MVP Application Logic
+   OmbuLedger - MVP Application Logic
    ============================================ */
 
 // Product data with corrected prices (local producers, not industrial)
