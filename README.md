@@ -1,74 +1,36 @@
-# OmbuLedger MVP
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-Plataforma que conecta productores agropecuarios locales con consumidores, con microfinanciamiento usando collateral real.
+## Getting Started
 
-## Stack Actual (MVP)
-
-- HTML5
-- CSS3 (con variables CSS)
-- JavaScript (Vanilla)
-
-## Stack Futuro
-
-- React + Vite
-- Stellar SDK
-- Freighter Wallet Integration
-
-## Estructura
-
-```
-/agro
-├── index.html      # Página principal
-├── styles.css      # Estilos
-├── app.js          # Lógica de la aplicación
-├── README.md       # Este archivo
-└── /src            # (Futuro) Código React
-```
-
-## Funcionalidades
-
-### Ticker de Precios
-- Barra animada con precios fluctuando ±3% cada 5 segundos
-- Indicadores visuales (↑ verde, ↓ rojo)
-- Sincronizado con precios del marketplace
-
-### Calculadora de Préstamos
-- LTV máximo 60% del colateral
-- Sistema francés de amortización
-- Tasa 35% anual
-- Disclaimer de validación física
-
-### Marketplace
-- 5 productos locales
-- Ciclo de compra animado (4 segundos)
-- Gestión de stock en tiempo real
-
-### Wallet (Mock)
-- Botón de conexión en header
-- Modal con opciones de wallet
-- Preparado para integración con Freighter
-
-## Cómo correr
-
-Simplemente abrir `index.html` en el navegador, o usar un servidor local:
+First, run the development server:
 
 ```bash
-npx serve .
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-## Productos
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-| Producto | Precio | Productor |
-|----------|--------|-----------|
-| ☕ Café de especialidad | $2.500/kg | Juan Pérez |
-| 🌱 Soja orgánica | $28/kg | Cooperativa San Martín |
-| 🌽 Maíz fresco | $19/kg | Familia González |
-| 🥚 Huevos de campo | $350/maple | Doña María |
-| 🥛 Leche pasteurizada | $180/litro | Rancho Los Álamos |
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-## Próximos Pasos
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-1. Inicializar React con Vite
-2. Integrar Stellar SDK
-3. Conectar Freighter wallet
-4. Smart contracts para préstamos
+## Learn More
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
