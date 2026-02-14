@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     StellarWalletsKit,
     WalletNetwork,
@@ -7,34 +7,56 @@ import {
     FREIGHTER_ID
 } from '@creit.tech/stellar-wallets-kit';
 
-// Singleton instance to prevent multiple initializations
-const kit = new StellarWalletsKit({
-    network: WalletNetwork.TESTNET,
-    selectedWalletId: FREIGHTER_ID,
-    modules: allowAllModules(),
-});
+// Singleton instance - se inicializa lazy solo en el cliente
+let kitInstance: StellarWalletsKit | null = null;
+
+function getKit(): StellarWalletsKit {
+    if (typeof window === 'undefined') {
+        throw new Error('StellarWalletsKit can only be used in the browser');
+    }
+    
+    if (!kitInstance) {
+        kitInstance = new StellarWalletsKit({
+            network: WalletNetwork.TESTNET,
+            selectedWalletId: FREIGHTER_ID,
+            modules: allowAllModules(),
+        });
+    }
+    return kitInstance;
+}
 
 export function useWallet() {
     const [address, setAddress] = useState<string | null>(null);
     const [isConnecting, setIsConnecting] = useState(false);
+    const kitRef = useRef<StellarWalletsKit | null>(null);
 
     useEffect(() => {
-        // Restore session
-        const stored = typeof window !== 'undefined' ? localStorage.getItem('wallet_address') : null;
-        if (stored) {
-            setAddress(stored);
+        // Solo inicializar en el cliente
+        if (typeof window !== 'undefined') {
+            kitRef.current = getKit();
+            
+            // Restore session
+            const stored = localStorage.getItem('wallet_address');
+            if (stored) {
+                setAddress(stored);
+            }
         }
     }, []);
 
     const connect = async (): Promise<string | null> => {
+        if (typeof window === 'undefined' || !kitRef.current) {
+            console.error('Wallet can only be connected in the browser');
+            return null;
+        }
+        
         setIsConnecting(true);
         return new Promise(async (resolve) => {
             try {
-                await kit.openModal({
+                await kitRef.current!.openModal({
                     onWalletSelected: async (option) => {
                         try {
-                            kit.setWallet(option.id);
-                            const { address } = await kit.getAddress();
+                            kitRef.current!.setWallet(option.id);
+                            const { address } = await kitRef.current!.getAddress();
                             setAddress(address);
                             localStorage.setItem('wallet_address', address);
                             resolve(address);
@@ -56,7 +78,9 @@ export function useWallet() {
 
     const disconnect = () => {
         setAddress(null);
-        localStorage.removeItem('wallet_address');
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('wallet_address');
+        }
     };
 
     return { address, connect, disconnect, isConnecting };

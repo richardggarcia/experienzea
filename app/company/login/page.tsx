@@ -1,0 +1,139 @@
+"use client";
+
+import { useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { Loader2, Building2, Lock, ArrowLeft } from "lucide-react";
+import Link from "next/link";
+
+export default function CompanyLogin() {
+    const [email, setEmail] = useState("admin@experienzea.com");
+    const [password, setPassword] = useState("");
+    const [error, setError] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+    const router = useRouter();
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setError("");
+
+        const result = await signIn("credentials", {
+            email,
+            password,
+            redirect: false,
+        });
+
+        if (result?.error) {
+            setError("Credenciales inválidas");
+            setIsLoading(false);
+        } else {
+            router.push("/company/dashboard");
+            router.refresh();
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
+            {/* Background gradients */}
+            <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-orange-500 opacity-[0.05] blur-[150px] rounded-full pointer-events-none"></div>
+            <div className="absolute bottom-[-20%] right-[-10%] w-[400px] h-[400px] bg-slate-700 opacity-[0.1] blur-[120px] rounded-full pointer-events-none"></div>
+
+            <div className="w-full max-w-md relative z-10">
+                {/* Back to home */}
+                <Link
+                    href="/"
+                    className="inline-flex items-center gap-2 text-slate-400 hover:text-orange-400 transition-colors mb-8"
+                >
+                    <ArrowLeft className="w-4 h-4" />
+                    Volver al inicio
+                </Link>
+
+                {/* Login Card */}
+                <div className="bg-slate-900/80 backdrop-blur-xl p-8 rounded-[2rem] border border-white/[0.1] shadow-2xl">
+                    <div className="text-center mb-8">
+                        <div className="w-16 h-16 bg-orange-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-orange-500/20">
+                            <Building2 className="w-8 h-8 text-orange-500" />
+                        </div>
+                        <h1 className="text-2xl font-bold text-white font-[family-name:var(--font-syne)] mb-2">
+                            Acceso Empresa
+                        </h1>
+                        <p className="text-slate-400 text-sm">
+                            Portal administrativo de ExperienZea
+                        </p>
+                    </div>
+
+                    {error && (
+                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl mb-6 text-sm text-center">
+                            {error}
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        <div>
+                            <label className="block text-sm font-bold text-slate-400 mb-2">
+                                Email
+                            </label>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl focus:border-orange-500 outline-none text-white transition-colors"
+                                placeholder="admin@experienzea.com"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-bold text-slate-400 mb-2">
+                                Contraseña
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl focus:border-orange-500 outline-none text-white transition-colors"
+                                    placeholder="••••••••"
+                                    required
+                                />
+                                <Lock className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-600" />
+                            </div>
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={isLoading}
+                            className="w-full bg-orange-600 text-white py-4 rounded-xl font-bold hover:bg-orange-500 transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                        >
+                            {isLoading ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    Verificando...
+                                </>
+                            ) : (
+                                "Ingresar al Panel"
+                            )}
+                        </button>
+                    </form>
+
+                    <div className="mt-6 pt-6 border-t border-slate-800 text-center">
+                        <p className="text-xs text-slate-500">
+                            ¿No sos parte del equipo?{" "}
+                            <Link href="/" className="text-orange-400 hover:text-orange-300">
+                                Ir al sitio público
+                            </Link>
+                        </p>
+                    </div>
+                </div>
+
+                {/* Hint for demo */}
+                <div className="mt-4 text-center">
+                    <p className="text-xs text-slate-600">
+                        Demo: admin@experienzea.com / 17515429
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+}

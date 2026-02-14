@@ -1,305 +1,289 @@
 "use client";
-
-import { motion, useScroll, useTransform } from "framer-motion";
-import { Tractor, Wallet, CheckCircle2, ShieldCheck, Coins, Clock, Building2, LayoutDashboard, Loader2 } from "lucide-react";
+import Link from "next/link";
 import LottieHero from "@/components/LottieHero";
-import AssetsCarousel from "@/components/AssetsCarousel";
-import LoanSimulator from "@/components/LoanSimulator";
-import { useWallet } from "@/hooks/useWallet";
-import { useRouter } from "next/navigation";
+import AssetLottie from "@/components/AssetLottie";
+import LoanCalculator from "@/components/LoanCalculator";
+import { ArrowRight, Tractor, Building2, Car, TrendingUp, ShieldCheck, Zap, Globe, Coins, Lock, Check, X, Rocket, Wifi, Battery, Signal, Plus } from "lucide-react";
+import { motion } from "framer-motion";
 
 export default function Home() {
-  const { scrollY } = useScroll();
-  const opacity = useTransform(scrollY, [0, 100], [0, 1]);
-  const y = useTransform(scrollY, [0, 100], [-20, 0]);
-
-  const { address, connect, isConnecting } = useWallet();
-  const router = useRouter();
-
-  const handleLogin = async () => {
-    if (address) {
-      router.push("/dashboard");
-    } else {
-      const connected = await connect();
-      if (connected) {
-        router.push("/dashboard");
-      }
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-[#F8F9FA] text-[#012148] font-sans selection:bg-[#0061e0] selection:text-white overflow-x-hidden">
+    <div className="min-h-screen relative overflow-hidden bg-[#020617] text-[#f8fafc] font-[family-name:var(--font-manrope)]">
+      {/* Background Gradients (Midnight Blue Theme) */}
+      <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-blue-600 opacity-[0.08] blur-[150px] rounded-full pointer-events-none"></div>
+      <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-indigo-600 opacity-[0.1] blur-[120px] rounded-full pointer-events-none"></div>
 
-      {/* Navbar Fixed */}
-      <motion.nav
-        style={{ backgroundColor: "rgba(255, 255, 255, 0.9)", opacity, y }}
-        className="fixed w-full z-50 top-0 border-b border-gray-100 backdrop-blur-md hidden lg:block"
-      >
-        <div className="max-w-[1400px] mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.scrollTo(0, 0)}>
-            <div className="w-10 h-10 bg-[#0061e0] rounded-xl flex items-center justify-center text-white font-bold text-xl">E</div>
-            <span className="text-2xl font-bold tracking-tight">ExperienZea</span>
-          </div>
-          <div className="flex gap-8 font-medium text-gray-600">
-            <a href="#" className="hover:text-[#0061e0]">Inversiones</a>
-            <a href="#" className="hover:text-[#0061e0]">Productos</a>
-            <a href="#" className="hover:text-[#0061e0]">Aprendé</a>
-          </div>
-          <button
-            onClick={handleLogin}
-            disabled={isConnecting}
-            className="bg-[#0061e0] text-white px-6 py-2.5 rounded-full font-bold hover:bg-blue-700 transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+      {/* Navigation */}
+      <nav className="relative z-50 flex justify-between items-center px-6 py-6 max-w-7xl mx-auto backdrop-blur-sm sticky top-0 border-b border-white/[0.05]">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-[0_0_20px_rgba(37,99,235,0.5)]">E</div>
+          <span className="text-xl font-bold tracking-tight font-[family-name:var(--font-syne)]">ExperienZea</span>
+        </div>
+        <div className="hidden md:flex gap-8 text-sm font-medium text-slate-400">
+          <a href="#calculator" className="hover:text-blue-400 transition-colors">Calculadora</a>
+          <a href="#assets" className="hover:text-white transition-colors">Activos</a>
+          <a href="#how" className="hover:text-white transition-colors">Cómo Funciona</a>
+        </div>
+        <Link
+          href="/dashboard"
+          className="px-6 py-2.5 rounded-full bg-blue-600/10 border border-blue-500/30 text-blue-400 font-bold hover:bg-blue-600 hover:text-white transition-all duration-300 text-sm tracking-wide"
+        >
+          Ingresar
+        </Link>
+      </nav>
+
+      <main className="relative z-10 w-full overflow-hidden">
+        {/* HERO SECTION */}
+        <section className="max-w-7xl mx-auto px-6 pt-12 pb-20 md:pt-20 md:pb-32 grid md:grid-cols-2 gap-12 items-center">
+
+          {/* TEXT CONTENT */}
+          <motion.div
+            initial={{ opacity: 0, x: -30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8 }}
+            className="space-y-8 relative z-20"
           >
-            {isConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : (address ? <LayoutDashboard className="w-4 h-4" /> : <Wallet className="w-4 h-4" />)}
-            {address ? "Ir al Dashboard" : "Ingresar"}
-          </button>
-        </div>
-      </motion.nav>
+            {/* Badge Removed */}
 
-      {/* Hero Section (Dark Navy Impact) */}
-      <section className="relative bg-[#012148] text-white pt-10 pb-32 lg:pb-48 rounded-b-[4rem] lg:rounded-b-[6rem] overflow-hidden shadow-2xl z-10">
+            <h1 className="text-5xl md:text-7xl font-bold leading-[1] tracking-tighter font-[family-name:var(--font-syne)]">
+              TU ACTIVO <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-600">ES TU BANCO.</span>
+            </h1>
 
-        {/* Navbar Overlay (Initial State) */}
-        <nav className="absolute top-0 w-full z-50">
-          <div className="max-w-[1400px] mx-auto px-6 h-24 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-white/10 backdrop-blur rounded-xl flex items-center justify-center text-white font-bold text-xl">E</div>
-              <span className="text-2xl font-bold tracking-tight">ExperienZea</span>
-            </div>
-            <div className="hidden lg:flex gap-8 font-medium text-blue-100/80">
-              <a href="#" className="hover:text-white transition-colors">Inversiones</a>
-              <a href="#" className="hover:text-white transition-colors">Productos</a>
-              <a href="#" className="hover:text-white transition-colors">Aprendé</a>
-            </div>
-            <button
-              onClick={handleLogin}
-              disabled={isConnecting}
-              className="bg-[#0061e0] text-white px-8 py-3 rounded-full font-bold hover:scale-105 transition-transform hover:shadow-lg hover:shadow-blue-500/30 flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : (address ? <LayoutDashboard className="w-4 h-4" /> : null)}
-              {address ? "Ir al Dashboard" : "Creá tu cuenta"}
-            </button>
-          </div>
-        </nav>
+            <p className="text-xl text-slate-400 max-w-lg leading-relaxed">
+              Transformá Maquinaria, Vehículos y Propiedades en liquidez. Aprobación basada en tu activo, no en tu banco.
+            </p>
 
-        {/* Rest of Hero Content... */}
-        <div className="max-w-[1400px] mx-auto px-6 mt-16 lg:mt-24 relative">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-
-            {/* Massive Typography */}
-            <motion.div
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-            >
-              <h1 className="text-6xl lg:text-[5.5rem] leading-[1] font-extrabold tracking-tight mb-8">
-                Tu próxima liquidez <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#0061e0] to-cyan-400">
-                  te espera.
-                </span>
-              </h1>
-              <p className="text-2xl text-blue-100/80 max-w-xl font-light mb-12 leading-relaxed">
-                Usá tus activos reales (Tractores, Autos, Propiedades) para obtener préstamos inmediatos en Stablecoins. Sin burocracia.
-              </p>
-
-              <div className="flex flex-col sm:flex-row gap-4 items-center sm:items-start">
-                <div className="w-48 h-48 bg-white/5 rounded-3xl backdrop-blur-sm border border-white/10 p-6 flex flex-col justify-between hover:bg-white/10 transition-colors cursor-pointer group">
-                  <Tractor className="w-10 h-10 text-cyan-400 group-hover:scale-110 transition-transform" />
-                  <div>
-                    <p className="text-sm text-blue-200">Garantía</p>
-                    <p className="text-xl font-bold">Maquinaria</p>
-                  </div>
-                </div>
-                <div className="w-48 h-48 bg-white/5 rounded-3xl backdrop-blur-sm border border-white/10 p-6 flex flex-col justify-between hover:bg-white/10 transition-colors cursor-pointer group">
-                  <Building2 className="w-10 h-10 text-cyan-400 group-hover:scale-110 transition-transform" />
-                  <div>
-                    <p className="text-sm text-blue-200">Garantía</p>
-                    <p className="text-xl font-bold">Inmuebles</p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Floating 3D Showcase */}
-            <motion.div
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 1, delay: 0.2 }}
-              className="relative h-[600px] w-full hidden lg:block"
-            >
-              {/* Phone/App Mockup Container */}
-              <div className="absolute right-0 top-10 w-[400px] h-[700px] bg-[#0061e0] rounded-[3rem] shadow-2xl rotate-[-6deg] border-8 border-gray-900 overflow-hidden transform hover:rotate-0 transition-transform duration-700">
-                <div className="absolute inset-0 bg-gradient-to-b from-[#0051c0] to-[#003180]">
-
-                  {/* Internal App UI */}
-                  <div className="p-8 text-white h-full flex flex-col relative z-20">
-                    <div className="flex justify-between items-center mb-8">
-                      <ShieldCheck className="w-8 h-8 opacity-80" />
-                      <span className="font-mono text-sm opacity-60">CONNECTED</span>
-                    </div>
-                    <p className="text-sm opacity-70">Liquidez Disponible</p>
-                    <h3 className="text-5xl font-bold mb-8">$1.050.240</h3>
-
-                    <div className="bg-white/10 rounded-2xl p-4 mb-4 backdrop-blur-md">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="bg-cyan-500 p-2 rounded-lg"><Tractor className="w-5 h-5 text-white" /></div>
-                        <div>
-                          <p className="font-bold text-sm">John Deere 5075E</p>
-                          <p className="text-xs opacity-70">Valuación: $45.000</p>
-                        </div>
-                      </div>
-                      <div className="w-full bg-black/20 h-1.5 rounded-full mt-2">
-                        <div className="bg-cyan-400 h-1.5 rounded-full w-[75%]"></div>
-                      </div>
-                    </div>
-
-                    {/* Lottie Animation Area */}
-                    <div className="flex-1 flex items-center justify-center relative -my-4 transform scale-125">
-                      <LottieHero />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Floating Cards */}
-              <motion.div
-                animate={{ y: [0, -20, 0] }}
-                transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-                className="absolute bottom-20 left-10 bg-white text-[#012148] p-6 rounded-3xl shadow-xl max-w-xs z-30"
+            <div className="flex flex-col sm:flex-row gap-4 pt-4">
+              <Link
+                href="/dashboard"
+                className="group relative px-8 py-4 bg-blue-600 text-white font-bold rounded-2xl overflow-hidden hover:scale-105 transition-transform duration-300 flex items-center justify-center gap-3 shadow-[0_10px_40px_rgba(37,99,235,0.3)]"
               >
-                <div className="flex items-center gap-4 mb-3">
-                  <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                    <Coins className="w-6 h-6 text-green-600" />
+                <span className="relative z-10">Creá tu Cuenta</span>
+                <ArrowRight className="w-5 h-5 relative z-10 group-hover:translate-x-1 transition-transform" />
+              </Link>
+              <a href="#calculator" className="px-8 py-4 bg-transparent border border-slate-700 text-white font-bold rounded-2xl hover:bg-slate-800 transition-colors flex items-center justify-center">
+                Simular Crédito
+              </a>
+            </div>
+
+            <div className="flex gap-8 pt-8 border-t border-slate-800/50">
+              <div className="space-y-1">
+                <p className="text-3xl font-bold text-white font-[family-name:var(--font-syne)]">$12M+</p>
+                <p className="text-xs text-slate-500 uppercase tracking-widest">Activos Gestionados</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-3xl font-bold text-white font-[family-name:var(--font-syne)]">Global</p>
+                <p className="text-xs text-slate-500 uppercase tracking-widest">Cobertura</p>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* PHONE VISUAL - SUBTLE FLOATING (Ref: User Image) */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+            className="relative h-[650px] w-full flex items-center justify-center"
+          >
+            {/* FLOATING CARD - LEFT (Gentle Float) */}
+            <motion.div
+              animate={{ y: [0, -10, 0] }}
+              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+              className="absolute left-0 bottom-40 z-30 bg-slate-900/90 backdrop-blur-xl border border-white/10 p-4 rounded-2xl shadow-2xl flex items-center gap-3 max-w-[200px]"
+            >
+              <div className="w-10 h-10 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center shadow-lg shadow-green-500/10">
+                <Check className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Aprobado</p>
+                <p className="text-green-400 font-bold text-lg font-[family-name:var(--font-syne)]">+50.000 USDC</p>
+              </div>
+            </motion.div>
+
+            {/* PHONE MOCKUP (Gentle Float, NO TILT) */}
+            <motion.div
+              animate={{ y: [0, -15, 0] }}
+              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+              className="relative w-[320px] h-[640px] bg-[#0a1835] rounded-[3.5rem] border-[10px] border-[#1e3a8a] shadow-[0_50px_100px_-20px_rgba(30,58,138,0.5)] overflow-hidden flex flex-col"
+            >
+              {/* Status Bar */}
+              <div className="h-10 px-6 flex justify-between items-center text-[10px] text-white/50 pt-3 relative z-20">
+                <span className="font-bold">Let's Connect</span>
+                <div className="flex gap-1.5 uppercase font-bold tracking-wider">
+                  Connected
+                </div>
+              </div>
+
+              {/* App Content */}
+              <div className="flex-1 p-6 relative overflow-hidden bg-gradient-to-b from-[#0a1835] via-[#172554] to-[#0a1835]">
+                <div className="relative z-10 pt-4">
+                  <ShieldCheck className="w-6 h-6 text-white/50 mb-4" />
+                  <p className="text-blue-200 text-xs uppercase tracking-widest mb-1 font-bold">Liquidez Disponible</p>
+                  <h2 className="text-4xl font-bold text-white mb-8 tracking-tight font-[family-name:var(--font-syne)]">$1.050.240</h2>
+                </div>
+
+                {/* TRACTOR CARD inside Phone */}
+                <div className="bg-blue-600/20 backdrop-blur-md rounded-[2rem] p-4 border border-blue-400/20 relative overflow-hidden h-[240px] mb-6">
+                  <div className="absolute inset-x-0 bottom-0 top-4 flex items-center justify-center scale-110 translate-y-2">
+                    <LottieHero />
                   </div>
-                  <div>
-                    <p className="font-bold text-lg">Aprobado</p>
-                    <p className="text-sm text-gray-500">hace 2 min</p>
+
+                  <div className="relative z-20 bg-blue-600/80 backdrop-blur-md px-4 py-2 rounded-xl inline-block shadow-lg">
+                    <div className="flex items-center gap-2">
+                      <Tractor className="w-4 h-4 text-white" />
+                      <div>
+                        <p className="text-[10px] text-blue-100 font-bold uppercase">John Deere 5075E</p>
+                        <p className="text-[9px] text-blue-200">Valuación: $45.000</p>
+                      </div>
+                    </div>
+                    <div className="h-1 w-full bg-blue-900/50 rounded-full mt-2 overflow-hidden">
+                      <div className="h-full w-[70%] bg-cyan-400"></div>
+                    </div>
                   </div>
                 </div>
-                <p className="text-2xl font-bold text-green-600">+$50.000 USDC</p>
-              </motion.div>
 
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* Assets Carousel - Infinite Marquee */}
-      <AssetsCarousel />
-
-      {/* Loan Simulator Section (New) */}
-      <section className="py-24 bg-gradient-to-br from-[#012148] to-[#00152e] text-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-1/2 h-full bg-[#0061e0]/10 blur-3xl rounded-full"></div>
-        <div className="max-w-[1400px] mx-auto px-6 relative z-10">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-cyan-300 text-xs font-semibold mb-6 border border-white/10">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
-                </span>
-                SIMULADOR EN VIVO
+                {/* Action Buttons (App Mock) */}
+                {/* Hidden for simplicity in visual, kept clean as per ref image, just showing content */}
               </div>
-              <h2 className="text-4xl lg:text-5xl font-bold mb-6">Calculá tu potencial de liquidez.</h2>
-              <p className="text-xl text-blue-200 mb-8 leading-relaxed">
-                No esperes a vender. Descubrí cuánto capital podés desbloquear hoy mismo usando tus activos como garantía.
+
+              {/* Home Indicator */}
+              <div className="h-1.5 w-32 bg-slate-700/50 rounded-full mx-auto mb-3 relative z-20"></div>
+            </motion.div>
+
+            {/* BLUE BACK GLOW */}
+            <div className="absolute inset-0 bg-blue-600/30 blur-[130px] -z-10 rounded-full scale-110 opacity-60 pointer-events-none"></div>
+
+          </motion.div>
+        </section>
+
+        {/* CALCULATOR SECTION */}
+        <section id="calculator" className="py-20 bg-slate-900/50 border-y border-white/[0.05] relative">
+          <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-16 items-center">
+            <div>
+              <h2 className="text-4xl md:text-5xl font-bold mb-6 font-[family-name:var(--font-syne)]">
+                Calculá tu <span className="text-blue-500">Poder de Fuego.</span>
+              </h2>
+              <p className="text-slate-400 text-lg mb-8 leading-relaxed">
+                ¿Cuánto vale tu activo? Usá nuestra calculadora para estimar la liquidez inmediata.
               </p>
-              <ul className="space-y-6">
+              <ul className="space-y-4">
                 {[
-                  "Tasas competitivas desde 8% anual en USDC.",
-                  "LTV hasta 70% del valor de mercado real.",
-                  "Sin costos ocultos ni letras chicas.",
-                  "Aprobación en 48hs hábiles."
-                ].map((item, i) => (
-                  <li key={i} className="flex items-center gap-4 text-lg">
-                    <div className="bg-cyan-500/20 p-2 rounded-full">
-                      <CheckCircle2 className="text-cyan-400 w-5 h-5" />
+                  "Tasa LTV competitiva (hasta 70%).",
+                  "Sin letras chicas ni costos ocultos.",
+                  "Aprobación basada en el activo."
+                ].map((feat, i) => (
+                  <li key={i} className="flex items-center gap-3 text-slate-300">
+                    <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
+                      <Check className="w-3 h-3" />
                     </div>
-                    {item}
+                    {feat}
                   </li>
                 ))}
               </ul>
             </div>
-            <div>
-              <LoanSimulator />
+            <div className="relative z-10">
+              <LoanCalculator />
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Value Props */}
-      <section className="py-32 relative bg-white">
-        <div className="max-w-[1400px] mx-auto px-6">
+        {/* ASSET CLASSES SECTION */}
+        <section id="assets" className="py-24 max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 font-[family-name:var(--font-syne)]">
+              Cualquier Activo Real. <span className="text-blue-500">Tokenizado.</span>
+            </h2>
+            <p className="text-slate-400 text-lg max-w-2xl mx-auto">
+              Si tiene valor intrínseco, te damos liquidez.
+            </p>
+          </div>
+
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              {
-                title: "Invertir es para todos",
-                desc: "Democratizamos el acceso a préstamos con garantía real.",
-                icon: <Building2 className="w-8 h-8" />,
-                color: "bg-blue-50 text-blue-600"
-              },
-              {
-                title: "Seguridad Institucional",
-                desc: "Tus activos están respaldados por contratos inteligentes auditados.",
-                icon: <ShieldCheck className="w-8 h-8" />,
-                color: "bg-green-50 text-green-600"
-              },
-              {
-                title: "Liquidez 24/7",
-                desc: "Accedé a tus fondos cuando los necesites, sin esperar horarios bancarios.",
-                icon: <Clock className="w-8 h-8" />,
-                color: "bg-purple-50 text-purple-600"
-              }
+              { title: "Maquinaria", type: 'tractor', desc: "Tractores, Cosechadoras, Equipos industriales.", color: "from-slate-800 to-slate-900", border: "hover:border-blue-500/30", text: "text-blue-400" },
+              { title: "Real Estate", type: 'house', desc: "Propiedades comerciales, campos, depósitos.", color: "from-slate-800 to-slate-900", border: "hover:border-blue-500/30", text: "text-blue-400" },
+              { title: "Vehículos", type: 'car', desc: "Autos de alta gama, flotas logísticas.", color: "from-slate-800 to-slate-900", border: "hover:border-blue-500/30", text: "text-blue-400" },
             ].map((item, i) => (
               <motion.div
                 key={i}
-                whileHover={{ y: -10 }}
-                className="bg-white p-10 rounded-[2.5rem] shadow-xl hover:shadow-2xl transition-all border border-gray-100"
+                whileHover={{ y: -5 }}
+                className={`p-8 rounded-[2rem] bg-gradient-to-br ${item.color} border border-white/[0.05] ${item.border} transition-all duration-300 group shadow-lg`}
               >
-                <div className={`w-16 h-16 ${item.color} rounded-2xl flex items-center justify-center mb-8`}>
-                  {item.icon}
+                <div className={`w-28 h-28 rounded-2xl bg-blue-500/5 border border-white/5 flex items-center justify-center mb-6 overflow-hidden relative`}>
+                  <AssetLottie type={item.type as any} />
                 </div>
-                <h3 className="text-3xl font-bold mb-4">{item.title}</h3>
-                <p className="text-gray-500 text-lg leading-relaxed">{item.desc}</p>
+                <h3 className="text-2xl font-bold mb-3 font-[family-name:var(--font-syne)]">{item.title}</h3>
+                <p className="text-slate-400">{item.desc}</p>
               </motion.div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* CTA Massive */}
-      <section className="bg-[#0061e0] text-white py-32 mx-4 rounded-[4rem] mb-20 text-center overflow-hidden relative">
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-        <div className="max-w-3xl mx-auto relative z-10 px-6">
-          <h2 className="text-5xl lg:text-7xl font-extrabold mb-10 tracking-tight">
-            Empezá ahora.
-          </h2>
-          <p className="text-2xl text-blue-100 mb-12">
-            Unite a la nueva era de las finanzas agrícolas y reales.
-          </p>
-          <button
-            onClick={handleLogin}
-            disabled={isConnecting}
-            className="bg-white text-[#0061e0] px-12 py-5 rounded-full font-bold text-xl hover:bg-gray-100 transition-all hover:scale-105 shadow-2xl disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            {address ? "Ir al Dashboard" : "Crear cuenta gratis"}
-          </button>
-        </div>
-      </section>
+        {/* COMPARISON SECTION */}
+        <section className="py-24 bg-slate-900/30 border-y border-white/[0.05]">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl md:text-5xl font-bold mb-6 font-[family-name:var(--font-syne)]">
+                ¿Por qué ExperienZea?
+              </h2>
+              <p className="text-slate-400 text-lg max-w-2xl mx-auto">
+                Diseñado para la economía real.
+              </p>
+            </div>
 
-      <footer className="bg-[#012148] text-white py-20 rounded-t-[4rem] -mb-1">
-        <div className="max-w-[1400px] mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-10">
-          <div>
-            <span className="text-2xl font-bold">ExperienZea</span>
-            <p className="text-blue-200 mt-2">© 2026 Todos los derechos reservados.</p>
+            <div className="grid md:grid-cols-3 gap-8 text-center">
+              {[
+                { title: "Sin Burocracia", desc: "Olvidate de carpetas infinitas. Todo digital y transparente.", icon: <Zap className="w-8 h-8" /> },
+                { title: "Cobertura Global", desc: "Accedé a capital internacional sin restricciones geográficas.", icon: <Globe className="w-8 h-8" /> },
+                { title: "Súper Flexible", desc: "Plazos y tasas adaptados a tu ciclo productivo.", icon: <Coins className="w-8 h-8" /> }
+              ].map((item, i) => (
+                <div key={i} className="p-8 rounded-[2rem] bg-slate-950 border border-slate-800 hover:border-blue-500/30 transition-colors group">
+                  <div className="w-16 h-16 rounded-full bg-slate-900 flex items-center justify-center mx-auto mb-6 text-blue-500 group-hover:scale-110 transition-transform">
+                    {item.icon}
+                  </div>
+                  <h3 className="text-xl font-bold mb-3 font-[family-name:var(--font-syne)]">{item.title}</h3>
+                  <p className="text-slate-400 leading-relaxed">{item.desc}</p>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="flex gap-8 text-blue-200">
-            <a href="#" className="hover:text-white">Términos</a>
-            <a href="#" className="hover:text-white">Privacidad</a>
-            <a href="#" className="hover:text-white">Contacto</a>
+        </section>
+
+        {/* CTA SECTION */}
+        <section className="py-32 text-center px-6 relative overflow-hidden">
+          <div className="absolute inset-0 bg-blue-600/5 blur-3xl rounded-full scale-150 z-0"></div>
+          <div className="relative z-10 max-w-3xl mx-auto">
+            <h2 className="text-5xl md:text-7xl font-bold mb-8 font-[family-name:var(--font-syne)] tracking-tighter">
+              Tu Liquidez te espera.
+            </h2>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-3 px-10 py-5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-lg shadow-[0_10px_50px_rgba(37,99,235,0.4)] transition-all hover:scale-105"
+            >
+              <Rocket className="w-6 h-6" />
+              Comenzar Ahora
+            </Link>
           </div>
-        </div>
-      </footer>
+        </section>
+
+        {/* FOOTER */}
+        <footer className="border-t border-white/[0.05] bg-slate-950 py-12 px-6">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold shadow-lg">E</div>
+              <span className="font-bold font-[family-name:var(--font-syne)]">ExperienZea</span>
+            </div>
+            <div className="text-slate-500 text-sm">
+              © 2024 ExperienZea Protocol. Built on Stellar.
+            </div>
+            <div className="flex gap-6 text-slate-400">
+              <a href="#" className="hover:text-blue-400 transition-colors"><Globe className="w-5 h-5" /></a>
+              <a href="#" className="hover:text-blue-400 transition-colors"><Lock className="w-5 h-5" /></a>
+            </div>
+          </div>
+        </footer>
+      </main>
     </div>
   );
 }
