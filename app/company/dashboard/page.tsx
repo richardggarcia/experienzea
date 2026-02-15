@@ -18,7 +18,8 @@ import {
     Rocket,
     Check,
     X,
-    Download
+    Download,
+    ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
