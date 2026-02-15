@@ -34,26 +34,26 @@ export default function CompanyLogin() {
     };
 
     return (
-        <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
+        <div className="min-h-screen bg-[#020617] flex items-center justify-center p-4 relative overflow-hidden">
             {/* Background gradients */}
-            <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-orange-500 opacity-[0.05] blur-[150px] rounded-full pointer-events-none"></div>
-            <div className="absolute bottom-[-20%] right-[-10%] w-[400px] h-[400px] bg-slate-700 opacity-[0.1] blur-[120px] rounded-full pointer-events-none"></div>
+            <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-blue-600 opacity-[0.05] blur-[150px] rounded-full pointer-events-none"></div>
+            <div className="absolute bottom-[-20%] right-[-10%] w-[400px] h-[400px] bg-indigo-700 opacity-[0.1] blur-[120px] rounded-full pointer-events-none"></div>
 
             <div className="w-full max-w-md relative z-10">
                 {/* Back to home */}
                 <Link
                     href="/"
-                    className="inline-flex items-center gap-2 text-slate-400 hover:text-orange-400 transition-colors mb-8"
+                    className="inline-flex items-center gap-2 text-slate-400 hover:text-blue-400 transition-colors mb-8"
                 >
                     <ArrowLeft className="w-4 h-4" />
                     Volver al inicio
                 </Link>
 
                 {/* Login Card */}
-                <div className="bg-slate-900/80 backdrop-blur-xl p-8 rounded-[2rem] border border-white/[0.1] shadow-2xl">
+                <div className="bg-slate-900/80 backdrop-blur-xl p-8 rounded-[2rem] border border-white/[0.1] shadow-2xl transition-all hover:border-blue-500/20">
                     <div className="text-center mb-8">
-                        <div className="w-16 h-16 bg-orange-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-orange-500/20">
-                            <Building2 className="w-8 h-8 text-orange-500" />
+                        <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-blue-500/20">
+                            <Building2 className="w-8 h-8 text-blue-500" />
                         </div>
                         <h1 className="text-2xl font-bold text-white font-[family-name:var(--font-syne)] mb-2">
                             Acceso Empresa
@@ -78,7 +78,7 @@ export default function CompanyLogin() {
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl focus:border-orange-500 outline-none text-white transition-colors"
+                                className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl focus:border-blue-500 outline-none text-white transition-colors placeholder:text-slate-600"
                                 placeholder="admin@experienzea.com"
                                 required
                             />
@@ -93,7 +93,7 @@ export default function CompanyLogin() {
                                     type="password"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl focus:border-orange-500 outline-none text-white transition-colors"
+                                    className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl focus:border-blue-500 outline-none text-white transition-colors placeholder:text-slate-600"
                                     placeholder="••••••••"
                                     required
                                 />
@@ -104,7 +104,7 @@ export default function CompanyLogin() {
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="w-full bg-orange-600 text-white py-4 rounded-xl font-bold hover:bg-orange-500 transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                            className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                             {isLoading ? (
                                 <>
@@ -120,7 +120,7 @@ export default function CompanyLogin() {
                     <div className="mt-6 pt-6 border-t border-slate-800 text-center">
                         <p className="text-xs text-slate-500">
                             ¿No sos parte del equipo?{" "}
-                            <Link href="/" className="text-orange-400 hover:text-orange-300">
+                            <Link href="/" className="text-blue-400 hover:text-blue-300">
                                 Ir al sitio público
                             </Link>
                         </p>

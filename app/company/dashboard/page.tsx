@@ -45,30 +45,6 @@ interface Asset {
     };
 }
 
-// Mock inicial para demo
-const MOCK_ASSETS: Asset[] = [
-    {
-        id: "1",
-        type: "tractor",
-        name: "John Deere 5075E",
-        value: 45000,
-        owner: "Juan Pérez",
-        ownerWallet: "G...ABC123",
-        status: "pending_review",
-        submittedAt: "2024-01-15T10:30:00",
-    },
-    {
-        id: "2",
-        type: "car",
-        name: "Toyota Hilux 2023",
-        value: 35000,
-        owner: "María González",
-        ownerWallet: "G...XYZ789",
-        status: "pending_review",
-        submittedAt: "2024-01-15T09:15:00",
-    },
-];
-
 export default function CompanyDashboard() {
     const { data: session, status } = useSession();
     const router = useRouter();
@@ -108,8 +84,8 @@ export default function CompanyDashboard() {
 
     if (status === "loading") {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-[#0f172a]">
-                <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+            <div className="min-h-screen flex items-center justify-center bg-[#020617]">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
             </div>
         );
     }
@@ -125,7 +101,7 @@ export default function CompanyDashboard() {
                 body: JSON.stringify({ status: 'approved' })
             });
             if (response.ok) {
-                await fetchAssets(); // Recargar datos
+                await fetchAssets();
             }
         } catch (error) {
             console.error('Error:', error);
@@ -167,7 +143,7 @@ export default function CompanyDashboard() {
             const response = await fetch(`/api/assets/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     status: 'funding_requested',
                     contract_id: contractId
                 })
@@ -187,17 +163,17 @@ export default function CompanyDashboard() {
             alert("Primero conectá la wallet de la empresa");
             return;
         }
-        
+
         if (!confirm("¿Confirmás el envío de fondos al solicitante? Esta acción simula la transferencia de USDC.")) {
             return;
         }
-        
+
         setIsProcessing(id);
         try {
             const response = await fetch(`/api/assets/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     status: 'funded'
                 })
             });
@@ -227,31 +203,31 @@ export default function CompanyDashboard() {
         switch (status) {
             case "pending_review":
                 return (
-                    <div className="px-3 py-1 rounded-full text-xs font-bold border bg-yellow-500/10 text-yellow-500 border-yellow-500/20 flex items-center gap-1">
+                    <div className="px-3 py-1 rounded-full text-xs font-bold border bg-yellow-500/10 text-yellow-500 border-yellow-500/20 flex items-center gap-1 w-fit">
                         <AlertCircle className="w-3 h-3" /> PENDIENTE
                     </div>
                 );
             case "approved":
                 return (
-                    <div className="px-3 py-1 rounded-full text-xs font-bold border bg-blue-500/10 text-blue-500 border-blue-500/20 flex items-center gap-1">
+                    <div className="px-3 py-1 rounded-full text-xs font-bold border bg-blue-500/10 text-blue-500 border-blue-500/20 flex items-center gap-1 w-fit">
                         <CheckCircle2 className="w-3 h-3" /> APROBADO
                     </div>
                 );
             case "tokenized":
                 return (
-                    <div className="px-3 py-1 rounded-full text-xs font-bold border bg-purple-500/10 text-purple-500 border-purple-500/20 flex items-center gap-1">
+                    <div className="px-3 py-1 rounded-full text-xs font-bold border bg-purple-500/10 text-purple-500 border-purple-500/20 flex items-center gap-1 w-fit">
                         <Coins className="w-3 h-3" /> TOKENIZADO
                     </div>
                 );
             case "funding_requested":
                 return (
-                    <div className="px-3 py-1 rounded-full text-xs font-bold border bg-orange-500/10 text-orange-500 border-orange-500/20 flex items-center gap-1">
+                    <div className="px-3 py-1 rounded-full text-xs font-bold border bg-blue-500/10 text-blue-500 border-blue-500/20 flex items-center gap-1 w-fit">
                         <Rocket className="w-3 h-3" /> FONDOS ENVIADOS
                     </div>
                 );
             case "funded":
                 return (
-                    <div className="px-3 py-1 rounded-full text-xs font-bold border bg-green-500/10 text-green-500 border-green-500/20 flex items-center gap-1">
+                    <div className="px-3 py-1 rounded-full text-xs font-bold border bg-green-500/10 text-green-500 border-green-500/20 flex items-center gap-1 w-fit">
                         <CheckCircle2 className="w-3 h-3" /> COMPLETADO
                     </div>
                 );
@@ -263,51 +239,129 @@ export default function CompanyDashboard() {
     const tokenizedCount = assets.filter((a) => a.status === "tokenized").length;
     const fundedCount = assets.filter((a) => a.status === "funding_requested" || a.status === "funded").length;
 
+    // Componente de acciones reutilizable para tabla y cards
+    const AssetActions = ({ asset }: { asset: Asset }) => (
+        <div className="flex flex-wrap items-center gap-2">
+            {asset.status === "pending_review" && (
+                <>
+                    <button
+                        onClick={() => setSelectedAsset(asset)}
+                        className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex items-center gap-2 shadow-lg shadow-blue-500/20"
+                        title="Ver documentos"
+                    >
+                        <FileText className="w-4 h-4" />
+                        <span className="text-sm font-bold">Ver Docs</span>
+                    </button>
+                    <button
+                        onClick={() => handleReject(asset.id)}
+                        className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-lg transition-colors"
+                        title="Rechazar"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </>
+            )}
+
+            {asset.status === "approved" && (
+                <button
+                    onClick={() => handleTokenize(asset.id)}
+                    disabled={isProcessing === asset.id || !address}
+                    className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-bold text-sm hover:from-purple-500 hover:to-indigo-500 transition-all shadow-lg shadow-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                    {isProcessing === asset.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                        <Coins className="w-4 h-4" />
+                    )}
+                    Tokenizar
+                </button>
+            )}
+
+            {asset.status === "tokenized" && (
+                <button
+                    onClick={() => handleCreateEscrow(asset.id)}
+                    disabled={isProcessing === asset.id || !address}
+                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-lg font-bold text-sm hover:from-blue-500 hover:to-cyan-400 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                    {isProcessing === asset.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                        <Rocket className="w-4 h-4" />
+                    )}
+                    Crear Escrow
+                </button>
+            )}
+
+            {asset.status === "funding_requested" && (
+                <button
+                    onClick={() => handleSendFunds(asset.id)}
+                    disabled={isProcessing === asset.id || !address}
+                    className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-lg font-bold text-sm hover:from-green-500 hover:to-emerald-400 transition-all shadow-lg shadow-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                    {isProcessing === asset.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                        <Check className="w-4 h-4" />
+                    )}
+                    Enviar Fondos
+                </button>
+            )}
+
+            {asset.status === "funded" && (
+                <span className="text-xs text-green-500 font-bold bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> Completado
+                </span>
+            )}
+        </div>
+    );
+
     return (
-        <div className="min-h-screen bg-[#0f172a] text-slate-50">
+        <div className="min-h-screen bg-[#020617] text-slate-50 relative overflow-hidden font-sans">
+            {/* Background Gradients */}
+            <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-blue-600 opacity-[0.03] blur-[150px] rounded-full pointer-events-none"></div>
+
             {/* Header */}
-            <nav className="bg-slate-900/80 backdrop-blur-md border-b border-white/[0.05] px-6 py-4 sticky top-0 z-50">
+            <nav className="bg-slate-900/80 backdrop-blur-md border-b border-white/[0.05] px-4 md:px-6 py-4 sticky top-0 z-50">
                 <div className="max-w-7xl mx-auto flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-[0_0_15px_rgba(234,88,12,0.3)]">
+                        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-[0_0_15px_rgba(37,99,235,0.3)] shrink-0">
                             E
                         </div>
-                        <div>
-                            <span className="text-xl font-bold tracking-tight font-[family-name:var(--font-syne)]">
+                        <div className="flex flex-col md:flex-row md:items-center md:gap-2 leading-tight">
+                            <span className="text-lg md:text-xl font-bold tracking-tight font-[family-name:var(--font-syne)]">
                                 ExperienZea
                             </span>
-                            <span className="text-slate-500 text-sm ml-2">
+                            <span className="text-slate-500 text-xs md:text-sm hidden md:inline">
                                 | Panel de Control
                             </span>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 md:gap-4">
                         {/* Wallet de la Empresa */}
                         {address ? (
-                            <span className="hidden md:flex items-center gap-2 text-xs bg-green-500/10 text-green-400 px-4 py-2 rounded-full font-mono border border-green-500/20">
-                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                                {address.substring(0, 6)}...{address.substring(address.length - 4)}
-                                <span className="text-green-600">(Empresa)</span>
+                            <span className="flex items-center gap-2 text-[10px] md:text-xs bg-green-500/10 text-green-400 px-3 py-1.5 md:px-4 md:py-2 rounded-full font-mono border border-green-500/20">
+                                <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                {address.substring(0, 4)}...{address.substring(address.length - 4)}
                             </span>
                         ) : (
                             <button
                                 onClick={() => connect()}
                                 disabled={isConnecting}
-                                className="hidden md:flex items-center gap-2 text-xs bg-orange-500/10 text-orange-400 px-4 py-2 rounded-full font-mono border border-orange-500/20 hover:bg-orange-500/20 transition-colors"
+                                className="flex items-center gap-2 text-[10px] md:text-xs bg-blue-500/10 text-blue-400 px-3 py-1.5 md:px-4 md:py-2 rounded-full font-mono border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
                             >
                                 <Wallet className="w-3 h-3" />
-                                {isConnecting ? "Conectando..." : "Conectar Wallet Empresa"}
+                                {isConnecting ? "..." : "Conectar"}
                             </button>
                         )}
 
                         {/* User menu */}
-                        <div className="flex items-center gap-3 border-l border-slate-800 pl-4">
+                        <div className="flex items-center gap-2 border-l border-slate-800 pl-2 md:pl-4">
                             <div className="text-right hidden sm:block">
-                                <p className="text-sm font-bold text-white">
+                                <p className="text-sm font-bold text-white truncate max-w-[120px]">
                                     {session.user?.name}
                                 </p>
-                                <p className="text-xs text-slate-500">Administrador</p>
+                                <p className="text-[10px] text-slate-500 uppercase tracking-widest">Admin</p>
                             </div>
                             <button
                                 onClick={() => signOut({ callbackUrl: "/company/login" })}
@@ -321,202 +375,57 @@ export default function CompanyDashboard() {
                 </div>
             </nav>
 
-            <main className="max-w-7xl mx-auto px-6 py-8">
-                {/* Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                    <div className="bg-slate-900/50 p-5 rounded-2xl border border-white/[0.05]">
-                        <p className="text-yellow-500 text-3xl font-bold font-[family-name:var(--font-syne)]">
+            <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8 relative z-10">
+                {/* Stats Grid - Responsive */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
+                    <div className="bg-slate-900/50 p-4 md:p-5 rounded-2xl border border-white/[0.05] group hover:border-blue-500/20 transition-all">
+                        <p className="text-yellow-500 text-2xl md:text-3xl font-bold font-[family-name:var(--font-syne)]">
                             {pendingCount}
                         </p>
-                        <p className="text-slate-500 text-xs uppercase tracking-wider mt-1">
+                        <p className="text-slate-500 text-[10px] md:text-xs uppercase tracking-wider mt-1">
                             Pendientes
                         </p>
                     </div>
-                    <div className="bg-slate-900/50 p-5 rounded-2xl border border-white/[0.05]">
-                        <p className="text-blue-500 text-3xl font-bold font-[family-name:var(--font-syne)]">
+                    <div className="bg-slate-900/50 p-4 md:p-5 rounded-2xl border border-white/[0.05] group hover:border-blue-500/20 transition-all">
+                        <p className="text-blue-500 text-2xl md:text-3xl font-bold font-[family-name:var(--font-syne)]">
                             {approvedCount}
                         </p>
-                        <p className="text-slate-500 text-xs uppercase tracking-wider mt-1">
+                        <p className="text-slate-500 text-[10px] md:text-xs uppercase tracking-wider mt-1">
                             Aprobados
                         </p>
                     </div>
-                    <div className="bg-slate-900/50 p-5 rounded-2xl border border-white/[0.05]">
-                        <p className="text-purple-500 text-3xl font-bold font-[family-name:var(--font-syne)]">
+                    <div className="bg-slate-900/50 p-4 md:p-5 rounded-2xl border border-white/[0.05] group hover:border-blue-500/20 transition-all">
+                        <p className="text-purple-500 text-2xl md:text-3xl font-bold font-[family-name:var(--font-syne)]">
                             {tokenizedCount}
                         </p>
-                        <p className="text-slate-500 text-xs uppercase tracking-wider mt-1">
+                        <p className="text-slate-500 text-[10px] md:text-xs uppercase tracking-wider mt-1">
                             Tokenizados
                         </p>
                     </div>
-                    <div className="bg-slate-900/50 p-5 rounded-2xl border border-white/[0.05]">
-                        <p className="text-green-500 text-3xl font-bold font-[family-name:var(--font-syne)]">
+                    <div className="bg-slate-900/50 p-4 md:p-5 rounded-2xl border border-white/[0.05] group hover:border-blue-500/20 transition-all">
+                        <p className="text-green-500 text-2xl md:text-3xl font-bold font-[family-name:var(--font-syne)]">
                             {fundedCount}
                         </p>
-                        <p className="text-slate-500 text-xs uppercase tracking-wider mt-1">
+                        <p className="text-slate-500 text-[10px] md:text-xs uppercase tracking-wider mt-1">
                             En Fondeo
                         </p>
                     </div>
                 </div>
 
-                {/* Mobile Wallet Button */}
-                {!address && (
-                    <div className="md:hidden mb-6">
-                        <button
-                            onClick={() => connect()}
-                            disabled={isConnecting}
-                            className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"
-                        >
-                            <Wallet className="w-5 h-5" />
-                            {isConnecting ? "Conectando..." : "Conectar Wallet Empresa"}
-                        </button>
-                    </div>
-                )}
-
-                {/* Assets Table */}
-                <div className="bg-slate-900/50 rounded-3xl border border-white/[0.05] overflow-hidden">
+                {/* Assets Section */}
+                <div className="bg-slate-900/50 rounded-[2rem] border border-white/[0.05] overflow-hidden">
                     <div className="p-6 border-b border-white/[0.05]">
-                        <h2 className="text-xl font-bold font-[family-name:var(--font-syne)]">
+                        <h2 className="text-xl font-bold font-[family-name:var(--font-syne)] text-white">
                             Activos Registrados
                         </h2>
-                        <p className="text-slate-500 text-sm mt-1">
+                        <p className="text-slate-500 text-sm mt-1 font-[family-name:var(--font-manrope)]">
                             Gestión de garantías y tokenización
                         </p>
                     </div>
 
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-slate-950/50 text-slate-400 text-xs uppercase">
-                                <tr>
-                                    <th className="px-6 py-4 text-left">Activo</th>
-                                    <th className="px-6 py-4 text-left">Titular</th>
-                                    <th className="px-6 py-4 text-left">Valor</th>
-                                    <th className="px-6 py-4 text-left">Estado</th>
-                                    <th className="px-6 py-4 text-left">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/[0.05]">
-                                <AnimatePresence>
-                                    {assets.map((asset) => (
-                                        <motion.tr
-                                            key={asset.id}
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            exit={{ opacity: 0 }}
-                                            className="hover:bg-white/[0.02] transition-colors"
-                                        >
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-orange-400">
-                                                        {getIcon(asset.type)}
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-bold text-white">
-                                                            {asset.name}
-                                                        </p>
-                                                        <p className="text-xs text-slate-500">
-                                                            ID: {asset.id}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <p className="text-white">{asset.owner}</p>
-                                                <p className="text-xs text-slate-500 font-mono">
-                                                    {asset.ownerWallet || asset.owner_wallet}
-                                                </p>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <p className="text-white font-bold">
-                                                    ${asset.value.toLocaleString()}
-                                                </p>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {getStatusBadge(asset.status)}
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-2">
-                                                    {asset.status === "pending_review" && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => setSelectedAsset(asset)}
-                                                                className="px-3 py-2 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg transition-colors flex items-center gap-2"
-                                                                title="Ver documentos"
-                                                            >
-                                                                <FileText className="w-4 h-4" />
-                                                                <span className="text-sm font-bold">Ver Docs</span>
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleReject(asset.id)}
-                                                                className="p-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded-lg transition-colors"
-                                                                title="Rechazar"
-                                                            >
-                                                                <X className="w-4 h-4" />
-                                                            </button>
-                                                        </>
-                                                    )}
-
-                                                    {asset.status === "approved" && (
-                                                        <button
-                                                            onClick={() => handleTokenize(asset.id)}
-                                                            disabled={isProcessing === asset.id || !address}
-                                                            className="px-4 py-2 bg-purple-600 text-white rounded-lg font-bold text-sm hover:bg-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                                                        >
-                                                            {isProcessing === asset.id ? (
-                                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                                            ) : (
-                                                                <Coins className="w-4 h-4" />
-                                                            )}
-                                                            Tokenizar
-                                                        </button>
-                                                    )}
-
-                                                    {asset.status === "tokenized" && (
-                                                        <button
-                                                            onClick={() => handleCreateEscrow(asset.id)}
-                                                            disabled={isProcessing === asset.id || !address}
-                                                            className="px-4 py-2 bg-orange-600 text-white rounded-lg font-bold text-sm hover:bg-orange-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                                                        >
-                                                            {isProcessing === asset.id ? (
-                                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                                            ) : (
-                                                                <Rocket className="w-4 h-4" />
-                                                            )}
-                                                            Crear Escrow
-                                                        </button>
-                                                    )}
-
-                                                    {asset.status === "funding_requested" && (
-                                                        <button
-                                                            onClick={() => handleSendFunds(asset.id)}
-                                                            disabled={isProcessing === asset.id || !address}
-                                                            className="px-4 py-2 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                                                        >
-                                                            {isProcessing === asset.id ? (
-                                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                                            ) : (
-                                                                <Check className="w-4 h-4" />
-                                                            )}
-                                                            Enviar Fondos
-                                                        </button>
-                                                    )}
-
-                                                    {asset.status === "funded" && (
-                                                        <span className="text-xs text-green-500 font-mono">
-                                                            ✓ Completado
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </motion.tr>
-                                    ))}
-                                </AnimatePresence>
-                            </tbody>
-                        </table>
-                    </div>
-
                     {loading ? (
                         <div className="p-12 text-center">
-                            <Loader2 className="w-8 h-8 text-orange-500 animate-spin mx-auto mb-4" />
+                            <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
                             <p className="text-slate-400">Cargando activos...</p>
                         </div>
                     ) : assets.length === 0 ? (
@@ -526,7 +435,108 @@ export default function CompanyDashboard() {
                             </div>
                             <p className="text-slate-400">No hay activos registrados</p>
                         </div>
-                    ) : null}
+                    ) : (
+                        <>
+                            {/* Desktop Table View */}
+                            <div className="hidden md:block overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-slate-950/50 text-slate-400 text-xs uppercase tracking-wider">
+                                        <tr>
+                                            <th className="px-6 py-4 text-left font-medium">Activo</th>
+                                            <th className="px-6 py-4 text-left font-medium">Titular</th>
+                                            <th className="px-6 py-4 text-left font-medium">Valor</th>
+                                            <th className="px-6 py-4 text-left font-medium">Estado</th>
+                                            <th className="px-6 py-4 text-left font-medium">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/[0.05]">
+                                        <AnimatePresence>
+                                            {assets.map((asset) => (
+                                                <motion.tr
+                                                    key={asset.id}
+                                                    initial={{ opacity: 0 }}
+                                                    animate={{ opacity: 1 }}
+                                                    className="hover:bg-white/[0.02] transition-colors group"
+                                                >
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-blue-400 border border-transparent group-hover:border-blue-500/30 transition-all">
+                                                                {getIcon(asset.type)}
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-bold text-white text-sm">
+                                                                    {asset.name}
+                                                                </p>
+                                                                <p className="text-[10px] text-slate-500 font-mono">
+                                                                    ID: {asset.id.slice(0, 8)}...
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <p className="text-white text-sm">{asset.owner}</p>
+                                                        <p className="text-[10px] text-slate-500 font-mono">
+                                                            {(asset.ownerWallet || asset.owner_wallet || "").slice(0, 6)}...
+                                                        </p>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <p className="text-white font-bold font-mono">
+                                                            ${asset.value.toLocaleString()}
+                                                        </p>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        {getStatusBadge(asset.status)}
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <AssetActions asset={asset} />
+                                                    </td>
+                                                </motion.tr>
+                                            ))}
+                                        </AnimatePresence>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Mobile Card View */}
+                            <div className="md:hidden p-4 space-y-4">
+                                <AnimatePresence>
+                                    {assets.map((asset) => (
+                                        <motion.div
+                                            key={asset.id}
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            className="bg-slate-900 border border-white/[0.05] rounded-2xl p-5 shadow-lg relative overflow-hidden"
+                                        >
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-blue-400">
+                                                        {getIcon(asset.type)}
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-bold text-white">{asset.name}</h3>
+                                                        <p className="text-xs text-slate-500">{asset.owner}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-lg font-bold text-white font-[family-name:var(--font-syne)]">
+                                                        ${asset.value.toLocaleString()}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center justify-between mb-4 border-t border-white/[0.05] pt-4">
+                                                {getStatusBadge(asset.status)}
+                                            </div>
+
+                                            <div className="flex flex-wrap gap-2">
+                                                <AssetActions asset={asset} />
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </AnimatePresence>
+                            </div>
+                        </>
+                    )}
                 </div>
             </main>
 
@@ -537,7 +547,7 @@ export default function CompanyDashboard() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[100] p-4"
+                        className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center z-[100] p-4"
                         onClick={() => setSelectedAsset(null)}
                     >
                         <motion.div
@@ -545,15 +555,15 @@ export default function CompanyDashboard() {
                             animate={{ scale: 1, y: 0 }}
                             exit={{ scale: 0.9, y: 20 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-slate-900 p-8 rounded-[2rem] w-full max-w-lg border border-white/[0.1] max-h-[90vh] overflow-y-auto"
+                            className="bg-slate-900 p-6 md:p-8 rounded-[2rem] w-full max-w-lg border border-white/[0.1] max-h-[90vh] overflow-y-auto shadow-2xl relative"
                         >
-                            <div className="flex justify-between items-start mb-6">
+                            <div className="flex justify-between items-start mb-6 sticky top-0 bg-slate-900 z-10 py-2 border-b border-white/[0.05]">
                                 <div>
                                     <h3 className="text-xl font-bold text-white font-[family-name:var(--font-syne)]">
                                         Documentación
                                     </h3>
                                     <p className="text-slate-500 text-sm">
-                                        {selectedAsset.name} - {selectedAsset.owner}
+                                        {selectedAsset.name}
                                     </p>
                                 </div>
                                 <button
@@ -564,97 +574,89 @@ export default function CompanyDashboard() {
                                 </button>
                             </div>
 
-                            <div className="space-y-4">
+                            <div className="space-y-4 pb-6">
                                 {/* Documento de Seguro */}
-                                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 transition-colors hover:border-blue-500/20">
                                     <div className="flex items-center justify-between mb-3">
-                                        <span className="text-sm font-bold text-slate-400">
-                                            Seguro del Activo
+                                        <span className="text-sm font-bold text-slate-300 flex items-center gap-2">
+                                            <ShieldCheck className="w-4 h-4 text-blue-400" /> Seguro
                                         </span>
                                         {selectedAsset.documents?.insurance && (
-                                            <a 
-                                                href={selectedAsset.documents.insurance} 
-                                                target="_blank" 
+                                            <a
+                                                href={selectedAsset.documents.insurance}
+                                                target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="text-orange-400 hover:text-orange-300 text-sm flex items-center gap-1"
+                                                className="text-blue-400 hover:text-blue-300 text-xs flex items-center gap-1 font-bold uppercase tracking-wider"
                                             >
-                                                <Download className="w-4 h-4" /> Descargar
+                                                <Download className="w-3 h-3" /> Descargar
                                             </a>
                                         )}
                                     </div>
-                                    <div className="aspect-video bg-slate-900 rounded-lg flex items-center justify-center border border-slate-800 overflow-hidden">
+                                    <div className="aspect-video bg-slate-900 rounded-lg flex items-center justify-center border border-slate-800 overflow-hidden relative group">
                                         {selectedAsset.documents?.insurance ? (
-                                            <img 
-                                                src={selectedAsset.documents.insurance} 
+                                            <img
+                                                src={selectedAsset.documents.insurance}
                                                 alt="Seguro"
-                                                className="w-full h-full object-contain"
+                                                className="w-full h-full object-contain transition-transform group-hover:scale-105"
                                                 onError={(e) => {
                                                     (e.target as HTMLImageElement).style.display = 'none';
-                                                    (e.target as HTMLImageElement).parentElement!.innerHTML = '<span class="text-slate-600 text-sm">Error cargando imagen</span>';
+                                                    (e.target as HTMLImageElement).parentElement!.innerHTML = '<span class="text-slate-600 text-sm">Error visualizando</span>';
                                                 }}
                                             />
                                         ) : (
                                             <span className="text-slate-600 text-sm">
-                                                No hay documento de seguro
+                                                No hay documento
                                             </span>
                                         )}
                                     </div>
                                 </div>
 
                                 {/* Título de Propiedad */}
-                                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 transition-colors hover:border-blue-500/20">
                                     <div className="flex items-center justify-between mb-3">
-                                        <span className="text-sm font-bold text-slate-400">
-                                            Título de Propiedad
+                                        <span className="text-sm font-bold text-slate-300 flex items-center gap-2">
+                                            <FileText className="w-4 h-4 text-blue-400" /> Título
                                         </span>
                                         {selectedAsset.documents?.property && (
-                                            <a 
-                                                href={selectedAsset.documents.property} 
-                                                target="_blank" 
+                                            <a
+                                                href={selectedAsset.documents.property}
+                                                target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="text-orange-400 hover:text-orange-300 text-sm flex items-center gap-1"
+                                                className="text-blue-400 hover:text-blue-300 text-xs flex items-center gap-1 font-bold uppercase tracking-wider"
                                             >
-                                                <Download className="w-4 h-4" /> Descargar
+                                                <Download className="w-3 h-3" /> Descargar
                                             </a>
                                         )}
                                     </div>
-                                    <div className="aspect-video bg-slate-900 rounded-lg flex items-center justify-center border border-slate-800 overflow-hidden">
+                                    <div className="aspect-video bg-slate-900 rounded-lg flex items-center justify-center border border-slate-800 overflow-hidden relative group">
                                         {selectedAsset.documents?.property ? (
                                             selectedAsset.documents.property.endsWith('.pdf') ? (
-                                                <div className="text-center">
+                                                <div className="text-center group-hover:scale-105 transition-transform">
                                                     <FileText className="w-12 h-12 text-slate-600 mx-auto mb-2" />
-                                                    <span className="text-slate-500 text-sm">Documento PDF</span>
-                                                    <a 
-                                                        href={selectedAsset.documents.property}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer" 
-                                                        className="block text-orange-400 text-sm mt-1 hover:underline"
-                                                    >
-                                                        Ver documento
-                                                    </a>
+                                                    <span className="text-slate-500 text-xs uppercase tracking-wider font-bold">PDF Document</span>
                                                 </div>
                                             ) : (
-                                                <img 
-                                                    src={selectedAsset.documents.property} 
-                                                    alt="Título de Propiedad"
-                                                    className="w-full h-full object-contain"
+                                                <img
+                                                    src={selectedAsset.documents.property}
+                                                    alt="Título"
+                                                    className="w-full h-full object-contain transition-transform group-hover:scale-105"
                                                     onError={(e) => {
                                                         (e.target as HTMLImageElement).style.display = 'none';
-                                                        (e.target as HTMLImageElement).parentElement!.innerHTML = '<span class="text-slate-600 text-sm">Error cargando imagen</span>';
+                                                        (e.target as HTMLImageElement).parentElement!.innerHTML = '<span class="text-slate-600 text-sm">Error visualizando</span>';
                                                     }}
                                                 />
                                             )
                                         ) : (
                                             <span className="text-slate-600 text-sm">
-                                                No hay título de propiedad
+                                                No hay documento
                                             </span>
                                         )}
                                     </div>
                                 </div>
 
                                 {/* Checkbox de confirmación */}
-                                <div className="bg-blue-500/5 border border-blue-500/20 p-4 rounded-xl">
-                                    <label className="flex items-start gap-3 cursor-pointer">
+                                <div className="bg-blue-600/10 border border-blue-500/20 p-4 rounded-xl">
+                                    <label className="flex items-start gap-3 cursor-pointer select-none">
                                         <input
                                             type="checkbox"
                                             checked={docsReviewed.has(selectedAsset.id)}
@@ -667,16 +669,16 @@ export default function CompanyDashboard() {
                                                 }
                                                 setDocsReviewed(newSet);
                                             }}
-                                            className="mt-1 w-5 h-5 accent-blue-500"
+                                            className="mt-1 w-5 h-5 accent-blue-500 bg-slate-800 border-slate-600 rounded"
                                         />
-                                        <span className="text-sm text-slate-300">
-                                            Confirmo que revisé todos los documentos y son válidos
+                                        <span className="text-sm text-blue-100 font-medium leading-relaxed">
+                                            Confirmo que he verificado la autenticidad de estos documentos.
                                         </span>
                                     </label>
                                 </div>
                             </div>
 
-                            <div className="flex gap-3 mt-6 pt-6 border-t border-slate-800">
+                            <div className="flex flex-col sm:flex-row gap-3 mt-4 pt-6 border-t border-slate-800 sticky bottom-0 bg-slate-900 z-10 pb-2">
                                 <button
                                     onClick={() => {
                                         handleApprove(selectedAsset.id);
@@ -688,7 +690,7 @@ export default function CompanyDashboard() {
                                         });
                                     }}
                                     disabled={isProcessing === selectedAsset.id || !docsReviewed.has(selectedAsset.id)}
-                                    className="flex-1 bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-500 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex-1 bg-green-600 text-white py-4 rounded-xl font-bold hover:bg-green-500 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-500/20"
                                 >
                                     {isProcessing === selectedAsset.id ? (
                                         <Loader2 className="w-5 h-5 animate-spin" />
@@ -702,7 +704,7 @@ export default function CompanyDashboard() {
                                         handleReject(selectedAsset.id);
                                         setSelectedAsset(null);
                                     }}
-                                    className="flex-1 bg-red-600/20 text-red-400 py-3 rounded-xl font-bold hover:bg-red-600 hover:text-white transition-colors"
+                                    className="flex-1 bg-red-500/10 text-red-500 py-4 rounded-xl font-bold hover:bg-red-500/20 transition-colors border border-red-500/20"
                                 >
                                     Rechazar
                                 </button>

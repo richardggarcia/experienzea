@@ -59,13 +59,13 @@ export default function Dashboard() {
 
     const fetchAssets = async () => {
         if (!address) return;
-        
+
         try {
             const response = await fetch('/api/assets');
             if (response.ok) {
                 const data = await response.json();
                 // Filtrar solo los activos de ESTA wallet
-                const myAssets = data.filter((asset: Asset) => 
+                const myAssets = data.filter((asset: Asset) =>
                     asset.owner_wallet === address || asset.ownerWallet === address
                 );
                 setAssets(myAssets);
@@ -98,24 +98,29 @@ export default function Dashboard() {
     const [isProcess, setIsProcess] = useState<string | null>(null);
 
     // Authentication Check
-    if (isConnecting) return <div className="min-h-screen flex items-center justify-center bg-[#0f172a]"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div>;
+    if (isConnecting) return <div className="min-h-screen flex items-center justify-center bg-[#020617]"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
 
     if (!address) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-4 text-slate-50">
-                <div className="bg-slate-900/50 p-8 rounded-[2rem] shadow-xl max-w-md w-full border border-slate-700 text-center backdrop-blur-md relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 blur-[50px] rounded-full"></div>
-                    <h1 className="text-3xl font-bold mb-4 font-[family-name:var(--font-syne)] text-orange-500">Conectá tu Wallet</h1>
+            <div className="min-h-screen flex items-center justify-center bg-[#020617] p-4 text-slate-50 relative overflow-hidden">
+                {/* Background Gradients */}
+                <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-blue-600 opacity-[0.05] blur-[150px] rounded-full pointer-events-none"></div>
+                <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-indigo-600 opacity-[0.1] blur-[120px] rounded-full pointer-events-none"></div>
+
+                <div className="bg-slate-900/50 p-8 rounded-[2rem] shadow-xl max-w-md w-full border border-slate-700 text-center backdrop-blur-md relative overflow-hidden z-10 transition-all hover:border-blue-500/30">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-[50px] rounded-full"></div>
+                    <h1 className="text-3xl font-bold mb-4 font-[family-name:var(--font-syne)] text-blue-500">Conectá tu Wallet</h1>
                     <p className="text-slate-400 mb-8 leading-relaxed font-[family-name:var(--font-manrope)]">
                         Para gestionar tus activos y acceder a liquidez global, conectá tu billetera Freighter.
                     </p>
                     <button
                         onClick={() => connect()}
-                        className="w-full bg-orange-600 text-white px-6 py-4 rounded-xl font-bold hover:bg-orange-500 transition-all shadow-lg shadow-orange-500/20 mb-4 flex justify-center items-center gap-2"
+                        className="w-full bg-blue-600 text-white px-6 py-4 rounded-xl font-bold hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20 mb-4 flex justify-center items-center gap-2"
                     >
+                        <ShieldCheck className="w-5 h-5" />
                         Conectar Freighter
                     </button>
-                    <button onClick={() => router.push("/")} className="text-sm text-slate-500 hover:text-orange-400 flex items-center justify-center gap-1 mx-auto transition-colors">
+                    <button onClick={() => router.push("/")} className="text-sm text-slate-500 hover:text-blue-400 flex items-center justify-center gap-1 mx-auto transition-colors">
                         <ArrowLeft className="w-4 h-4" /> Volver al Inicio
                     </button>
                 </div>
@@ -153,7 +158,7 @@ export default function Dashboard() {
             if (!response.ok) throw new Error('Error guardando asset');
 
             const createdAsset = await response.json();
-            
+
             // Guardar perfil del usuario en localStorage para autocompletar próximos préstamos
             if (address && typeof window !== 'undefined') {
                 localStorage.setItem(`user_profile_${address}`, JSON.stringify({
@@ -161,7 +166,7 @@ export default function Dashboard() {
                     wallet: address
                 }));
             }
-            
+
             setAssets([...assets, createdAsset]);
             setIsSubmitting(false);
             setShowForm(false);
@@ -175,27 +180,6 @@ export default function Dashboard() {
         }
     };
 
-    const handleAdminApprove = (id: string) => {
-        setAssets(assets.map(a => a.id === id ? { ...a, status: 'approved' } : a));
-    };
-
-    const handleMint = (id: string) => {
-        setIsProcess(id);
-        setTimeout(() => {
-            setAssets(assets.map(a => a.id === id ? { ...a, status: 'tokenized' } : a));
-            setIsProcess(null);
-        }, 2000);
-    };
-
-    const handleRequestFunding = async (id: string) => {
-        setIsProcess(id);
-        // Simulate Trustless Work Escrow Creation
-        setTimeout(() => {
-            setAssets(assets.map(a => a.id === id ? { ...a, status: 'funding_requested', contract_id: `CTX-${Math.floor(Math.random() * 10000)}-TW` } : a));
-            setIsProcess(null);
-        }, 2000);
-    };
-
     const getIcon = (type: string) => {
         if (type === 'tractor') return <Tractor className="w-8 h-8" />;
         if (type === 'house') return <Building2 className="w-8 h-8" />;
@@ -207,21 +191,25 @@ export default function Dashboard() {
             case 'pending_review': return <div className="px-3 py-1 rounded-full text-xs font-bold border bg-yellow-500/10 text-yellow-500 border-yellow-500/20 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> EN REVISIÓN</div>;
             case 'approved': return <div className="px-3 py-1 rounded-full text-xs font-bold border bg-blue-500/10 text-blue-500 border-blue-500/20 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> APROBADO</div>;
             case 'tokenized': return <div className="px-3 py-1 rounded-full text-xs font-bold border bg-purple-500/10 text-purple-500 border-purple-500/20 flex items-center gap-1"><Coins className="w-3 h-3" /> TOKENIZADO</div>;
-            case 'funding_requested': return <div className="px-3 py-1 rounded-full text-xs font-bold border bg-orange-500/10 text-orange-500 border-orange-500/20 flex items-center gap-1"><Rocket className="w-3 h-3" /> FONDOS ENVIADOS</div>;
+            case 'funding_requested': return <div className="px-3 py-1 rounded-full text-xs font-bold border bg-green-500/10 text-green-500 border-green-500/20 flex items-center gap-1"><Rocket className="w-3 h-3" /> FONDOS ENVIADOS</div>;
             case 'funded': return <div className="px-3 py-1 rounded-full text-xs font-bold border bg-green-500/10 text-green-500 border-green-500/20 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> COMPLETADO</div>;
         }
     }
 
     return (
-        <div className="min-h-screen bg-[#0f172a] font-sans text-slate-50">
+        <div className="min-h-screen bg-[#020617] font-sans text-slate-50 relative overflow-hidden">
+            {/* Background Gradients */}
+            <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-blue-600 opacity-[0.03] blur-[150px] rounded-full pointer-events-none"></div>
+            <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-indigo-600 opacity-[0.05] blur-[120px] rounded-full pointer-events-none"></div>
+
             <nav className="bg-slate-900/80 backdrop-blur-md border-b border-white/[0.05] px-6 py-4 flex justify-between items-center sticky top-0 z-50">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-[0_0_15px_rgba(234,88,12,0.3)]">E</div>
+                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-[0_0_15px_rgba(37,99,235,0.3)]">E</div>
                     <span className="text-xl font-bold tracking-tight font-[family-name:var(--font-syne)]">ExperienZea <span className="text-slate-500 font-normal text-base block md:inline font-[family-name:var(--font-manrope)]">| Dashboard</span></span>
                 </div>
                 <div className="flex items-center gap-4">
-                    <span className="hidden md:flex items-center gap-2 text-xs bg-orange-500/10 text-orange-400 px-4 py-2 rounded-full font-mono border border-orange-500/20">
-                        <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse shadow-[0_0_8px_#f97316]"></div>
+                    <span className="hidden md:flex items-center gap-2 text-xs bg-blue-500/10 text-blue-400 px-4 py-2 rounded-full font-mono border border-blue-500/20">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse shadow-[0_0_8px_#3b82f6]"></div>
                         {address.substring(0, 4)}...{address.substring(address.length - 4)}
                     </span>
                     <button onClick={() => { disconnect(); router.push("/"); }} className="p-2 hover:bg-red-500/10 text-slate-500 hover:text-red-400 rounded-xl transition-colors" title="Desconectar">
@@ -230,12 +218,12 @@ export default function Dashboard() {
                 </div>
             </nav>
 
-            <main className="max-w-7xl mx-auto px-6 py-12 relative">
+            <main className="max-w-7xl mx-auto px-6 py-12 relative z-10">
                 {/* Header */}
                 <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-6">
                     <div>
                         <h1 className="text-4xl md:text-5xl font-bold mb-3 tracking-tighter text-white font-[family-name:var(--font-syne)]">
-                            Mis <span className="text-orange-500">Garantías</span>
+                            Mis <span className="text-blue-500">Garantías</span>
                         </h1>
                         <p className="text-slate-400 text-lg font-[family-name:var(--font-manrope)]">Subí tu documentación y esperá la aprobación para tokenizar.</p>
                     </div>
@@ -244,7 +232,7 @@ export default function Dashboard() {
                             setTempAssetId(uuidv4());
                             setShowForm(true);
                         }}
-                        className="bg-orange-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.3)] flex items-center gap-2 transition-transform hover:scale-105"
+                        className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-500 shadow-[0_0_20px_rgba(37,99,235,0.3)] flex items-center gap-2 transition-transform hover:scale-105"
                     >
                         <Plus className="w-5 h-5" /> Cargar Seguro Colateral
                     </button>
@@ -252,16 +240,16 @@ export default function Dashboard() {
 
                 {/* Stats */}
                 <div className="grid md:grid-cols-3 gap-6 mb-12">
-                    <div className="bg-slate-900/50 p-6 rounded-[2rem] shadow-lg border border-white/[0.05] backdrop-blur-sm">
-                        <p className="text-orange-400 text-xs font-bold uppercase tracking-widest mb-2 font-[family-name:var(--font-syne)]">Liquidez Disponible</p>
+                    <div className="bg-slate-900/50 p-6 rounded-[2rem] shadow-lg border border-white/[0.05] backdrop-blur-sm group hover:border-blue-500/20 transition-all">
+                        <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-2 font-[family-name:var(--font-syne)]">Liquidez Disponible</p>
                         <p className="text-4xl font-bold text-white mb-1 font-[family-name:var(--font-syne)]">$0.00 <span className="text-lg text-slate-500 font-normal font-[family-name:var(--font-manrope)]">USDC</span></p>
                     </div>
-                    <div className="bg-slate-900/50 p-6 rounded-[2rem] shadow-lg border border-white/[0.05] backdrop-blur-sm">
-                        <p className="text-orange-400 text-xs font-bold uppercase tracking-widest mb-2 font-[family-name:var(--font-syne)]">Valor Tokenizado</p>
+                    <div className="bg-slate-900/50 p-6 rounded-[2rem] shadow-lg border border-white/[0.05] backdrop-blur-sm group hover:border-blue-500/20 transition-all">
+                        <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-2 font-[family-name:var(--font-syne)]">Valor Tokenizado</p>
                         <p className="text-4xl font-bold text-white mb-1 font-[family-name:var(--font-syne)]">${assets.filter(a => a.status === 'tokenized' || a.status === 'funding_requested').reduce((acc, curr) => acc + curr.value, 0).toLocaleString()}</p>
                     </div>
-                    <div className="bg-slate-900/50 p-6 rounded-[2rem] shadow-lg border border-white/[0.05] backdrop-blur-sm">
-                        <p className="text-orange-400 text-xs font-bold uppercase tracking-widest mb-2 font-[family-name:var(--font-syne)]">En Revisión</p>
+                    <div className="bg-slate-900/50 p-6 rounded-[2rem] shadow-lg border border-white/[0.05] backdrop-blur-sm group hover:border-blue-500/20 transition-all">
+                        <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-2 font-[family-name:var(--font-syne)]">En Revisión</p>
                         <p className="text-4xl font-bold text-white mb-1 font-[family-name:var(--font-syne)]">{assets.filter(a => a.status === 'pending_review').length}</p>
                     </div>
                 </div>
@@ -276,10 +264,10 @@ export default function Dashboard() {
                                 initial={{ opacity: 0, scale: 0.9 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.9 }}
-                                className="bg-slate-900 p-6 rounded-[2.5rem] shadow-xl border border-white/[0.05] relative overflow-hidden group hover:shadow-[0_0_30px_rgba(249,115,22,0.15)] hover:border-orange-500/30 transition-all duration-300"
+                                className="bg-slate-900 p-6 rounded-[2.5rem] shadow-xl border border-white/[0.05] relative overflow-hidden group hover:shadow-[0_0_30px_rgba(37,99,235,0.15)] hover:border-blue-500/30 transition-all duration-300"
                             >
                                 <div className="flex justify-between items-start mb-6">
-                                    <div className="w-16 h-16 bg-orange-500/10 rounded-2xl flex items-center justify-center text-orange-400">
+                                    <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-400">
                                         {getIcon(asset.type)}
                                     </div>
                                     {getStatusBadge(asset.status)}
@@ -294,7 +282,7 @@ export default function Dashboard() {
                                 </div>
 
                                 {/* STATUS MESSAGES FOR BORROWER */}
-                                
+
                                 {asset.status === 'pending_review' && (
                                     <div className="w-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2">
                                         <FileText className="w-4 h-4" /> Documentación en revisión
@@ -314,7 +302,7 @@ export default function Dashboard() {
                                 )}
 
                                 {asset.status === 'funding_requested' && (
-                                    <div className="w-full bg-orange-500/10 border border-orange-500/20 text-orange-500 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2">
+                                    <div className="w-full bg-blue-500/10 border border-blue-500/20 text-blue-500 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2">
                                         <Rocket className="w-4 h-4" /> Esperando liberación de fondos
                                     </div>
                                 )}
@@ -336,9 +324,9 @@ export default function Dashboard() {
                                     setTempAssetId(uuidv4());
                                     setShowForm(true);
                                 }}
-                                className="border-2 border-dashed border-slate-800 bg-slate-900/30 rounded-[2.5rem] flex flex-col items-center justify-center h-full min-h-[380px] text-slate-600 hover:border-orange-500/50 hover:text-orange-400 hover:bg-orange-500/5 transition-all cursor-pointer group bg-slate-950 col-span-1 md:col-start-2"
+                                className="border-2 border-dashed border-slate-800 bg-slate-900/30 rounded-[2.5rem] flex flex-col items-center justify-center h-full min-h-[380px] text-slate-600 hover:border-blue-500/50 hover:text-blue-400 hover:bg-blue-500/5 transition-all cursor-pointer group bg-slate-950 col-span-1 md:col-start-2"
                             >
-                                <div className="w-20 h-20 bg-slate-950 border border-slate-800 rounded-full flex items-center justify-center mb-6 group-hover:bg-orange-600 group-hover:border-orange-500 transition-all duration-300 shadow-xl">
+                                <div className="w-20 h-20 bg-slate-950 border border-slate-800 rounded-full flex items-center justify-center mb-6 group-hover:bg-blue-600 group-hover:border-blue-500 transition-all duration-300 shadow-xl">
                                     <Upload className="w-8 h-8 text-slate-700 group-hover:text-white transition-colors" />
                                 </div>
                                 <span className="font-bold text-lg font-[family-name:var(--font-syne)]">Cargar Seguro Colateral</span>
@@ -369,7 +357,7 @@ export default function Dashboard() {
                             >
                                 {isSubmitting ? (
                                     <div className="flex flex-col items-center justify-center py-12 text-white">
-                                        <Loader2 className="w-16 h-16 text-orange-500 animate-spin mb-6" />
+                                        <Loader2 className="w-16 h-16 text-blue-500 animate-spin mb-6" />
                                         <h3 className="text-2xl font-bold mb-2 font-[family-name:var(--font-syne)]">Enviando Documentación...</h3>
                                         <p className="text-slate-400 text-center font-[family-name:var(--font-manrope)]">Encriptando archivos y subiendo a IPFS/R2.<br />Tus datos están seguros.</p>
                                     </div>
@@ -399,7 +387,7 @@ export default function Dashboard() {
                                                 <input
                                                     type="text"
                                                     required
-                                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:border-orange-500 outline-none text-white disabled:opacity-50"
+                                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:border-blue-500 outline-none text-white disabled:opacity-50"
                                                     placeholder="Tu Nombre Completo"
                                                     value={newAsset.owner}
                                                     onChange={e => setNewAsset({ ...newAsset, owner: e.target.value })}
@@ -411,7 +399,7 @@ export default function Dashboard() {
                                                 <input
                                                     type="text"
                                                     required
-                                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:border-orange-500 outline-none text-white"
+                                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:border-blue-500 outline-none text-white"
                                                     placeholder="Ej: Tractor John Deere XL"
                                                     value={newAsset.name}
                                                     onChange={e => setNewAsset({ ...newAsset, name: e.target.value })}
@@ -423,7 +411,7 @@ export default function Dashboard() {
                                                 <input
                                                     type="number"
                                                     required
-                                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:border-orange-500 outline-none text-white"
+                                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:border-blue-500 outline-none text-white"
                                                     placeholder="45000"
                                                     value={newAsset.value}
                                                     onChange={e => setNewAsset({ ...newAsset, value: e.target.value })}
@@ -446,13 +434,13 @@ export default function Dashboard() {
                                                 onUploadComplete={(url) => setNewAsset({ ...newAsset, propertyDoc: url })}
                                             />
 
-                                            <div className="bg-orange-500/5 border border-orange-500/10 p-4 rounded-xl flex gap-3 items-start">
+                                            <div className="bg-blue-500/5 border border-blue-500/10 p-4 rounded-xl flex gap-3 items-start">
                                                 <input
                                                     type="checkbox"
                                                     id="legalCheck"
                                                     checked={newAsset.legalCheck}
                                                     onChange={e => setNewAsset({ ...newAsset, legalCheck: e.target.checked })}
-                                                    className="mt-1 w-5 h-5 accent-orange-500 bg-slate-950 border-slate-700 rounded cursor-pointer"
+                                                    className="mt-1 w-5 h-5 accent-blue-500 bg-slate-950 border-slate-700 rounded cursor-pointer"
                                                 />
                                                 <label htmlFor="legalCheck" className="text-xs text-slate-400 cursor-pointer select-none leading-relaxed">
                                                     Declaro bajo mi responsabilidad que el activo se encuentra a mi nombre, en condiciones óptimas, y autorizo su ejecución como garantía en caso de incumplimiento de pago según los términos del Smart Contract.
@@ -460,7 +448,7 @@ export default function Dashboard() {
                                             </div>
                                         </div>
 
-                                        <button type="submit" className="w-full mt-8 bg-orange-600 text-white py-4 rounded-xl font-bold hover:bg-orange-500 shadow-lg shadow-orange-500/20 font-[family-name:var(--font-syne)] uppercase tracking-wider text-sm">
+                                        <button type="submit" className="w-full mt-8 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-500 shadow-lg shadow-blue-500/20 font-[family-name:var(--font-syne)] uppercase tracking-wider text-sm">
                                             Enviar a Revisión
                                         </button>
                                     </form>

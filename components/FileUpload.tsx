@@ -119,7 +119,7 @@ export default function FileUpload({
             {!file ? (
                 <div
                     onClick={() => inputRef.current?.click()}
-                    className="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center hover:border-orange-500/50 hover:bg-orange-500/5 cursor-pointer transition-all bg-slate-950/50"
+                    className="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center hover:border-blue-500/50 hover:bg-blue-500/5 cursor-pointer transition-all bg-slate-950/50"
                 >
                     <Upload className="w-8 h-8 text-slate-500 mx-auto mb-2" />
                     <p className="text-sm text-slate-400">
@@ -132,11 +132,11 @@ export default function FileUpload({
             ) : (
                 <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-orange-500/10 rounded-lg flex items-center justify-center">
+                        <div className="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center">
                             {uploaded ? (
                                 <Check className="w-5 h-5 text-green-500" />
                             ) : uploading ? (
-                                <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
+                                <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
                             ) : (
                                 <File className="w-5 h-5 text-slate-400" />
                             )}

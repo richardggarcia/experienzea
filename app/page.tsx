@@ -275,7 +275,7 @@ export default function Home() {
               <span className="font-bold font-[family-name:var(--font-syne)]">ExperienZea</span>
             </div>
             <div className="text-slate-500 text-sm">
-              © 2024 ExperienZea Protocol. Built on Stellar.
+              © 2026 ExperienZea Protocol. Built on Stellar.
             </div>
             <div className="flex gap-6 text-slate-400">
               <a href="#" className="hover:text-blue-400 transition-colors"><Globe className="w-5 h-5" /></a>
