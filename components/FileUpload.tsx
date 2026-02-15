@@ -28,6 +28,13 @@ export default function FileUpload({
         const selectedFile = e.target.files?.[0];
         if (!selectedFile) return;
 
+        // Validar assetId
+        if (!assetId || assetId === "temp-" || assetId.startsWith("temp-undefined")) {
+            setError("Error: ID de activo no válido. Cerrá y volvé a abrir el formulario.");
+            console.error("❌ AssetId inválido:", assetId);
+            return;
+        }
+
         // Validar tamaño (10MB max)
         if (selectedFile.size > 10 * 1024 * 1024) {
             setError("El archivo es muy grande. Máximo 10MB.");
@@ -67,6 +74,8 @@ export default function FileUpload({
             console.log("✅ URL obtenida, subiendo a R2...");
 
             // 2. Subir archivo directamente a R2
+            console.log("🌐 Subiendo a:", uploadUrl.substring(0, 60) + "...");
+            
             const uploadResponse = await fetch(uploadUrl, {
                 method: "PUT",
                 body: selectedFile,
@@ -86,7 +95,11 @@ export default function FileUpload({
             onUploadComplete?.(publicUrl, key);
         } catch (err: any) {
             console.error("❌ Upload error:", err);
-            setError(err.message || "Error al subir el archivo. Intentá de nuevo.");
+            if (err.message?.includes("Failed to fetch")) {
+                setError("Error de conexión con el servidor de archivos. Si estás en producción, contactá al administrador para verificar la configuración CORS.");
+            } else {
+                setError(err.message || "Error al subir el archivo. Intentá de nuevo.");
+            }
             setFile(null);
             setUploaded(false);
         } finally {

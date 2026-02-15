@@ -363,6 +363,16 @@ export default function Dashboard() {
                                     </div>
                                 ) : (
                                     <form onSubmit={handleSubmitForReview}>
+                                        {/* Generar un assetId consistente para este formulario */}
+                                        {(() => {
+                                            // Asegurar que tenemos un assetId consistente
+                                            if (!tempAssetId) {
+                                                const newId = uuidv4();
+                                                setTempAssetId(newId);
+                                            }
+                                            return null;
+                                        })()}
+                                        
                                         <div className="flex justify-between items-center mb-6">
                                             <h2 className="text-2xl font-bold text-white font-[family-name:var(--font-syne)]">Carga de Seguro Colateral</h2>
                                             <button type="button" onClick={() => setShowForm(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400"><X className="w-5 h-5" /></button>
@@ -419,7 +429,7 @@ export default function Dashboard() {
                                             </div>
 
                                             <FileUpload
-                                                assetId={tempAssetId || "temp-" + Date.now()}
+                                                assetId={tempAssetId}
                                                 type="insurance"
                                                 label="Adjuntar Imágenes del Seguro (Frente, Dorso)"
                                                 accept="image/*"
@@ -427,7 +437,7 @@ export default function Dashboard() {
                                             />
 
                                             <FileUpload
-                                                assetId={tempAssetId || "temp-" + Date.now()}
+                                                assetId={tempAssetId}
                                                 type="property"
                                                 label="Adjuntar Título de Propiedad"
                                                 accept=".pdf,image/*"
