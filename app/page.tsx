@@ -1,9 +1,8 @@
 "use client";
 import Link from "next/link";
 import LottieHero from "@/components/LottieHero";
-import AssetLottie from "@/components/AssetLottie";
 import LoanCalculator from "@/components/LoanCalculator";
-import { ArrowRight, Tractor, Building2, Car, TrendingUp, ShieldCheck, Zap, Globe, Coins, Lock, Check, X, Rocket, Wifi, Battery, Signal, Plus } from "lucide-react";
+import { ArrowRight, Tractor, Building2, Car, ShieldCheck, Zap, Coins, Check, Rocket, Globe, Lock } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Home() {
@@ -160,7 +159,12 @@ export default function Home() {
         {/* CALCULATOR SECTION */}
         <section id="calculator" className="py-20 bg-slate-900/50 border-y border-white/[0.05] relative">
           <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-16 items-center">
-            <div>
+            <motion.div
+              initial={{ opacity: 0, x: -40 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ duration: 0.7, ease: "easeOut" }}
+            >
               <h2 className="text-4xl md:text-5xl font-bold mb-6 font-[family-name:var(--font-syne)]">
                 Calculá tu <span className="text-blue-500">Poder de Fuego.</span>
               </h2>
@@ -181,47 +185,145 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
-            </div>
-            <div className="relative z-10">
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, x: 40 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ duration: 0.7, ease: "easeOut", delay: 0.1 }}
+              className="relative z-10"
+            >
               <LoanCalculator />
-            </div>
+            </motion.div>
           </div>
         </section>
 
-        {/* ASSET CLASSES SECTION */}
-        <section id="assets" className="py-24 max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 font-[family-name:var(--font-syne)]">
-              Cualquier Activo Real. <span className="text-blue-500">Tokenizado.</span>
-            </h2>
-            <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-              Si tiene valor intrínseco, te damos liquidez.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { title: "Maquinaria", type: 'tractor', desc: "Tractores, Cosechadoras, Equipos industriales.", color: "from-slate-800 to-slate-900", border: "hover:border-blue-500/30", text: "text-blue-400" },
-              { title: "Real Estate", type: 'house', desc: "Propiedades comerciales, campos, depósitos.", color: "from-slate-800 to-slate-900", border: "hover:border-blue-500/30", text: "text-blue-400" },
-              { title: "Vehículos", type: 'car', desc: "Autos de alta gama, flotas logísticas.", color: "from-slate-800 to-slate-900", border: "hover:border-blue-500/30", text: "text-blue-400" },
-            ].map((item, i) => (
+        {/* ASSET CLASSES SECTION - Rediseñada */}
+        <section id="assets" className="py-24 relative overflow-hidden">
+          {/* Background decoration */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-blue-600/5 rounded-full blur-[150px] pointer-events-none"></div>
+          
+          <div className="max-w-7xl mx-auto px-6 relative z-10">
+            {/* Header mejorado */}
+            <div className="text-center mb-20">
               <motion.div
-                key={i}
-                whileHover={{ y: -5 }}
-                className={`p-8 rounded-[2rem] bg-gradient-to-br ${item.color} border border-white/[0.05] ${item.border} transition-all duration-300 group shadow-lg`}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6 }}
               >
-                <div className={`w-28 h-28 rounded-2xl bg-blue-500/5 border border-white/5 flex items-center justify-center mb-6 overflow-hidden relative`}>
-                  <AssetLottie type={item.type as any} />
-                </div>
-                <h3 className="text-2xl font-bold mb-3 font-[family-name:var(--font-syne)]">{item.title}</h3>
-                <p className="text-slate-400">{item.desc}</p>
+                <span className="inline-block px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-bold uppercase tracking-wider mb-6">
+                  Activos Soportados
+                </span>
+                <h2 className="text-4xl md:text-6xl font-bold mb-6 font-[family-name:var(--font-syne)]">
+                  Cualquier Activo Real.<br />
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-500">Tokenizado.</span>
+                </h2>
+                <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed">
+                  Si tiene valor intrínseco, te damos liquidez. Desde maquinaria agrícola hasta propiedades comerciales.
+                </p>
               </motion.div>
-            ))}
+            </div>
+
+            {/* Cards grid - Funciona en mobile y desktop */}
+            <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
+              {[
+                { 
+                  title: "Maquinaria Agrícola", 
+                  type: 'tractor', 
+                  desc: "Tractores, cosechadoras y equipos industriales. Tu herramienta de trabajo como garantía.",
+                  icon: Tractor,
+                  examples: ["John Deere", "Case IH", "New Holland"]
+                },
+                { 
+                  title: "Real Estate", 
+                  type: 'house', 
+                  desc: "Propiedades comerciales, campos, depósitos y terrenos. Inmuebles con valor verificable.",
+                  icon: Building2,
+                  examples: ["Campos", "Depósitos", "Oficinas"]
+                },
+                { 
+                  title: "Vehículos Premium", 
+                  type: 'car', 
+                  desc: "Autos de alta gama, camiones y flotas logísticas. Activos depreciables con valor residual.",
+                  icon: Car,
+                  examples: ["Camionetas", "Flotas", "Maquinaria pesada"]
+                },
+              ].map((item, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.5, delay: i * 0.1 }}
+                  whileHover={{ y: -8, transition: { duration: 0.2 } }}
+                  className="group relative"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                  <div className="relative h-full bg-slate-900/80 backdrop-blur-sm border border-white/[0.08] hover:border-blue-500/30 rounded-3xl p-8 transition-all duration-300 overflow-hidden">
+                    {/* Gradient background on hover */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-indigo-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                    
+                    {/* Icon container */}
+                    <div className="relative mb-8">
+                      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500/20 to-indigo-500/20 border border-blue-500/20 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+                        <item.icon className="w-10 h-10 text-blue-400" />
+                      </div>
+                      {/* Decorative element */}
+                      <div className="absolute -top-2 -right-2 w-8 h-8 bg-blue-500/10 rounded-full blur-xl"></div>
+                    </div>
+
+                    {/* Content */}
+                    <h3 className="text-2xl font-bold mb-4 font-[family-name:var(--font-syne)] text-white group-hover:text-blue-400 transition-colors">
+                      {item.title}
+                    </h3>
+                    <p className="text-slate-400 leading-relaxed mb-6">
+                      {item.desc}
+                    </p>
+
+                    {/* Examples tags */}
+                    <div className="flex flex-wrap gap-2">
+                      {item.examples.map((ex, j) => (
+                        <span key={j} className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-xs text-slate-400">
+                          {ex}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Arrow indicator */}
+                    <div className="absolute bottom-8 right-8 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:bg-blue-500/20">
+                      <ArrowRight className="w-5 h-5 text-blue-400" />
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Stats row */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-6"
+            >
+              {[
+                { value: "70%", label: "LTV Máximo" },
+                { value: "48h", label: "Tiempo de Aprobación" },
+                { value: "0%", label: "Costo Oculto" },
+                { value: "24/7", label: "Disponibilidad" },
+              ].map((stat, i) => (
+                <div key={i} className="text-center p-6 bg-white/[0.02] border border-white/[0.05] rounded-2xl">
+                  <p className="text-3xl md:text-4xl font-bold text-blue-400 font-[family-name:var(--font-syne)] mb-2">{stat.value}</p>
+                  <p className="text-sm text-slate-500 uppercase tracking-wider">{stat.label}</p>
+                </div>
+              ))}
+            </motion.div>
           </div>
         </section>
 
         {/* COMPARISON SECTION */}
-        <section className="py-24 bg-slate-900/30 border-y border-white/[0.05]">
+        <section className="py-16 md:py-20 bg-slate-900/30 border-y border-white/[0.05]">
           <div className="max-w-7xl mx-auto px-6">
             <div className="text-center mb-16">
               <h2 className="text-4xl md:text-5xl font-bold mb-6 font-[family-name:var(--font-syne)]">
@@ -234,11 +336,14 @@ export default function Home() {
 
             <div className="grid md:grid-cols-3 gap-8 text-center">
               {[
-                { title: "Sin Burocracia", desc: "Olvidate de carpetas infinitas. Todo digital y transparente.", icon: <Zap className="w-8 h-8" /> },
-                { title: "Cobertura Global", desc: "Accedé a capital internacional sin restricciones geográficas.", icon: <Globe className="w-8 h-8" /> },
-                { title: "Súper Flexible", desc: "Plazos y tasas adaptados a tu ciclo productivo.", icon: <Coins className="w-8 h-8" /> }
+                { title: "Liquidez en días", desc: "Tokenizá activos reales y accedé a capital sin esperar meses.", icon: <Zap className="w-8 h-8" /> },
+                { title: "Colateral verificado", desc: "Documentación auditada antes de liberar fondos.", icon: <ShieldCheck className="w-8 h-8" /> },
+                { title: "Escrow transparente", desc: "Pagos y liberaciones on-chain con trazabilidad total.", icon: <Coins className="w-8 h-8" /> }
               ].map((item, i) => (
-                <div key={i} className="p-8 rounded-[2rem] bg-slate-950 border border-slate-800 hover:border-blue-500/30 transition-colors group">
+                <div
+                  key={i}
+                  className="p-8 rounded-[2rem] bg-slate-950 border border-slate-800 hover:border-blue-500/30 transition-colors group"
+                >
                   <div className="w-16 h-16 rounded-full bg-slate-900 flex items-center justify-center mx-auto mb-6 text-blue-500 group-hover:scale-110 transition-transform">
                     {item.icon}
                   </div>

@@ -5,6 +5,15 @@ import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@/hooks/useWallet";
 import {
+    useInitializeEscrow,
+    useFundEscrow,
+    useReleaseFunds,
+    useSendTransaction,
+    useGetEscrowsFromIndexerBySigner,
+    useApproveMilestone,
+} from "@trustless-work/escrow";
+import * as freighterApi from "@stellar/freighter-api";
+import {
     LogOut,
     Loader2,
     CheckCircle2,
@@ -56,6 +65,55 @@ export default function CompanyDashboard() {
     const [loading, setLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+
+    const { deployEscrow } = useInitializeEscrow();
+    const { fundEscrow } = useFundEscrow();
+    const { releaseFunds } = useReleaseFunds();
+    const { sendTransaction } = useSendTransaction();
+    const { getEscrowsBySigner } = useGetEscrowsFromIndexerBySigner();
+    const { approveMilestone } = useApproveMilestone();
+
+    const usdcIssuer = process.env.NEXT_PUBLIC_USDC_ISSUER || "";
+    const usdcSymbol = process.env.NEXT_PUBLIC_USDC_SYMBOL || "USDC";
+    const testnetPassphrase = "Test SDF Network ; September 2015";
+
+    const freighter = freighterApi.default ? freighterApi.default : freighterApi;
+
+    const signAndSendXdr = async (unsignedXdr: string) => {
+        const signed = await freighter.signTransaction(unsignedXdr, {
+            networkPassphrase: testnetPassphrase,
+        });
+
+        const signedXdr =
+            typeof signed === "string"
+                ? signed
+                : signed?.signedTxXdr;
+
+        if (!signedXdr) {
+            throw new Error("No se pudo firmar la transaccion");
+        }
+
+        return sendTransaction(signedXdr);
+    };
+
+    const waitForEscrowContractId = async (signer: string, engagementId: string) => {
+        const attempts = 4;
+        for (let i = 0; i < attempts; i += 1) {
+            const escrows = await getEscrowsBySigner({
+                signer,
+                orderBy: "createdAt",
+                orderDirection: "desc",
+            });
+
+            const match = escrows.find((escrow) => escrow.engagementId === engagementId);
+            if (match?.contractId) {
+                return match.contractId;
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 1200));
+        }
+        return "";
+    };
 
     // Cargar assets desde Supabase
     useEffect(() => {
@@ -133,57 +191,200 @@ export default function CompanyDashboard() {
         }, 2000);
     };
 
-    const handleCreateEscrow = async (id: string) => {
+    const handleCreateEscrow = async (asset: Asset) => {
         if (!address) {
             alert("Primero conectá la wallet de la empresa");
             return;
         }
-        setIsProcessing(id);
+
+        const borrowerWallet = asset.ownerWallet || asset.owner_wallet;
+        if (!borrowerWallet) {
+            alert("El solicitante no tiene wallet asociada");
+            return;
+        }
+
+        if (!usdcIssuer) {
+            alert("Falta configurar NEXT_PUBLIC_USDC_ISSUER en .env.local");
+            return;
+        }
+
+        if (!process.env.NEXT_PUBLIC_TW_API_KEY) {
+            alert("Falta configurar NEXT_PUBLIC_TW_API_KEY en .env.local");
+            return;
+        }
+
+        setIsProcessing(asset.id);
         try {
-            const contractId = `TW-${Date.now().toString(36).toUpperCase()}`;
-            const response = await fetch(`/api/assets/${id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+            const payload = {
+                signer: address,
+                engagementId: asset.id,
+                title: `Prestamo ${asset.name}`,
+                roles: {
+                    approver: address,
+                    serviceProvider: borrowerWallet,
+                    platformAddress: address,
+                    releaseSigner: address,
+                    disputeResolver: address,
+                    receiver: borrowerWallet,
+                },
+                description: `Prestamo garantizado por ${asset.name}`,
+                amount: asset.value,
+                platformFee: 0,
+                milestones: [{ description: "Desembolso del prestamo" }],
+                trustline: {
+                    symbol: usdcSymbol,
+                    address: usdcIssuer,
+                },
+            };
+
+            const response = await deployEscrow(payload, "single-release");
+
+            if (response?.status === "FAILED") {
+                console.error("Trustless Work: deployEscrow FAILED", response);
+                throw new Error("Respuesta FAILED al crear escrow");
+            }
+
+            if (!response?.unsignedTransaction) {
+                throw new Error("No se recibio la transaccion del escrow");
+            }
+
+            const sendResponse = await signAndSendXdr(response.unsignedTransaction);
+            if (!sendResponse || sendResponse.status !== "SUCCESS") {
+                console.error("Trustless Work: sendTransaction FAILED", sendResponse);
+                throw new Error("No se pudo enviar la transaccion del escrow");
+            }
+
+            const contractId =
+                (response as any).contractId ||
+                (await waitForEscrowContractId(address, asset.id));
+            if (!contractId) {
+                throw new Error("No se recibio contractId del escrow");
+            }
+
+            const patchResponse = await fetch(`/api/assets/${asset.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    status: 'funding_requested',
-                    contract_id: contractId
-                })
+                    status: "funding_requested",
+                    contract_id: contractId,
+                }),
             });
-            if (response.ok) {
+
+            if (patchResponse.ok) {
                 await fetchAssets();
             }
         } catch (error) {
-            console.error('Error:', error);
+            console.error("Error:", error);
+            alert("Error creando el escrow. Revisá la consola.");
         } finally {
             setIsProcessing(null);
         }
     };
 
-    const handleSendFunds = async (id: string) => {
+    const handleSendFunds = async (asset: Asset) => {
         if (!address) {
             alert("Primero conectá la wallet de la empresa");
             return;
         }
 
-        if (!confirm("¿Confirmás el envío de fondos al solicitante? Esta acción simula la transferencia de USDC.")) {
+        if (!asset.contractId && !asset.contract_id) {
+            alert("Este activo no tiene escrow asociado");
             return;
         }
 
-        setIsProcessing(id);
+        if (!confirm("¿Confirmás el envío de fondos al solicitante? Esta acción fondea y libera USDC.")) {
+            return;
+        }
+
+        setIsProcessing(asset.id);
         try {
-            const response = await fetch(`/api/assets/${id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+            const contractId = asset.contractId || asset.contract_id || "";
+
+            const fundResponse = await fundEscrow(
+                {
+                    amount: asset.value,
+                    contractId,
+                    signer: address,
+                },
+                "single-release"
+            );
+
+            if (fundResponse?.status === "FAILED") {
+                console.error("Trustless Work: fundEscrow FAILED", fundResponse);
+                throw new Error("Respuesta FAILED al fondear escrow");
+            }
+
+            if (!fundResponse?.unsignedTransaction) {
+                throw new Error("No se recibio la transaccion de fondeo");
+            }
+
+            const fundSend = await signAndSendXdr(fundResponse.unsignedTransaction);
+            if (!fundSend || fundSend.status !== "SUCCESS") {
+                console.error("Trustless Work: sendTransaction (fund) FAILED", fundSend);
+                throw new Error("No se pudo enviar la transaccion de fondeo");
+            }
+
+            const approveResponse = await approveMilestone(
+                {
+                    contractId,
+                    milestoneIndex: "0",
+                    approver: address,
+                },
+                "single-release"
+            );
+
+            if (approveResponse?.status === "FAILED") {
+                console.error("Trustless Work: approveMilestone FAILED", approveResponse);
+                throw new Error("Respuesta FAILED al aprobar milestone");
+            }
+
+            if (!approveResponse?.unsignedTransaction) {
+                throw new Error("No se recibio la transaccion de aprobacion");
+            }
+
+            const approveSend = await signAndSendXdr(approveResponse.unsignedTransaction);
+            if (!approveSend || approveSend.status !== "SUCCESS") {
+                console.error("Trustless Work: sendTransaction (approve) FAILED", approveSend);
+                throw new Error("No se pudo enviar la transaccion de aprobacion");
+            }
+
+            const releaseResponse = await releaseFunds(
+                {
+                    contractId,
+                    releaseSigner: address,
+                },
+                "single-release"
+            );
+
+            if (releaseResponse?.status === "FAILED") {
+                console.error("Trustless Work: releaseFunds FAILED", releaseResponse);
+                throw new Error("Respuesta FAILED al liberar fondos");
+            }
+
+            if (!releaseResponse?.unsignedTransaction) {
+                throw new Error("No se recibio la transaccion de liberacion");
+            }
+
+            const releaseSend = await signAndSendXdr(releaseResponse.unsignedTransaction);
+            if (!releaseSend || releaseSend.status !== "SUCCESS") {
+                console.error("Trustless Work: sendTransaction (release) FAILED", releaseSend);
+                throw new Error("No se pudo enviar la transaccion de liberacion");
+            }
+
+            const response = await fetch(`/api/assets/${asset.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    status: 'funded'
-                })
+                    status: "funded",
+                }),
             });
             if (response.ok) {
                 await fetchAssets();
                 alert("✅ Fondos enviados correctamente al solicitante");
             }
         } catch (error) {
-            console.error('Error:', error);
+            console.error("Error:", error);
+            alert("Error enviando fondos. Revisá la consola.");
         } finally {
             setIsProcessing(null);
         }
@@ -223,7 +424,7 @@ export default function CompanyDashboard() {
             case "funding_requested":
                 return (
                     <div className="px-3 py-1 rounded-full text-xs font-bold border bg-blue-500/10 text-blue-500 border-blue-500/20 flex items-center gap-1 w-fit">
-                        <Rocket className="w-3 h-3" /> FONDOS ENVIADOS
+                        <Rocket className="w-3 h-3" /> ESCROW CREADO
                     </div>
                 );
             case "funded":
@@ -280,7 +481,7 @@ export default function CompanyDashboard() {
 
             {asset.status === "tokenized" && (
                 <button
-                    onClick={() => handleCreateEscrow(asset.id)}
+                    onClick={() => handleCreateEscrow(asset)}
                     disabled={isProcessing === asset.id || !address}
                     className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-lg font-bold text-sm hover:from-blue-500 hover:to-cyan-400 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
@@ -295,7 +496,7 @@ export default function CompanyDashboard() {
 
             {asset.status === "funding_requested" && (
                 <button
-                    onClick={() => handleSendFunds(asset.id)}
+                    onClick={() => handleSendFunds(asset)}
                     disabled={isProcessing === asset.id || !address}
                     className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-lg font-bold text-sm hover:from-green-500 hover:to-emerald-400 transition-all shadow-lg shadow-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >

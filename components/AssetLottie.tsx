@@ -4,14 +4,15 @@ import dynamic from "next/dynamic";
 
 const Lottie = dynamic(() => import("lottie-react"), { ssr: false });
 
-export default function AssetLottie({ type }: { type: 'tractor' | 'house' | 'car' }) {
+export default function AssetLottie({ type }: { type: string }) {
     const [animationData, setAnimationData] = useState(null);
 
     useEffect(() => {
         // Logic to load different JSONs based on type
-        // Ideally user provides: /lotties/house.json, /lotties/car.json
-        // For now we fallback to hero.json (tractor) or placeholders if missing
-        const fileName = type === 'house' ? 'house.json' : type === 'car' ? 'car.json' : 'hero.json';
+        let fileName = 'hero.json';
+        if (type === 'house' || type === 'silo') fileName = 'house.json';
+        if (type === 'car') fileName = 'car.json';
+        if (type === 'tractor') fileName = 'hero.json';
 
         fetch(`/lotties/${fileName}`)
             .then(res => {

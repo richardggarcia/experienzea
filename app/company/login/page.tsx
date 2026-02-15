@@ -127,12 +127,6 @@ export default function CompanyLogin() {
                     </div>
                 </div>
 
-                {/* Hint for demo */}
-                <div className="mt-4 text-center">
-                    <p className="text-xs text-slate-600">
-                        Demo: admin@experienzea.com / 17515429
-                    </p>
-                </div>
             </div>
         </div>
     );
