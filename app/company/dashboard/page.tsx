@@ -11,6 +11,7 @@ import {
     useSendTransaction,
     useGetEscrowsFromIndexerBySigner,
     useGetEscrowFromIndexerByContractIds,
+    useGetMultipleEscrowBalances,
     useApproveMilestone,
 } from "@trustless-work/escrow";
 import * as freighterApi from "@stellar/freighter-api";
@@ -29,7 +30,10 @@ import {
     Check,
     X,
     Download,
-    ShieldCheck
+    ShieldCheck,
+    Info,
+    AlertTriangle,
+    XCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -66,6 +70,13 @@ export default function CompanyDashboard() {
     const [loading, setLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+    
+    // 🎯 Estado de los milestones para mostrar indicador visual
+    const [milestoneStatuses, setMilestoneStatuses] = useState<Record<string, {
+        status?: string;
+        approved?: boolean;
+        completed?: boolean;
+    }>>({});
     const [modalState, setModalState] = useState({
         open: false,
         title: "",
@@ -82,6 +93,7 @@ export default function CompanyDashboard() {
     const { sendTransaction } = useSendTransaction();
     const { getEscrowsBySigner } = useGetEscrowsFromIndexerBySigner();
     const { getEscrowByContractIds } = useGetEscrowFromIndexerByContractIds();
+    const { getMultipleBalances } = useGetMultipleEscrowBalances();
     const { approveMilestone } = useApproveMilestone();
 
     // Verificar si el escrow ya fue liberado en la blockchain
@@ -233,47 +245,73 @@ export default function CompanyDashboard() {
         fetchAssets();
     }, []);
 
-    // Verificar automáticamente escrows que estén en funding_requested
+    // 🔄 Polling automático cada 5 segundos para escrows en funding_requested
     useEffect(() => {
-        const checkEscrows = async () => {
-            const pendingEscrows = assets.filter(
-                a => a.status === "funding_requested" && (a.contractId || a.contract_id)
-            );
+        const hasPendingEscrows = assets.some(a => a.status === "funding_requested");
+        if (!hasPendingEscrows) return;
 
-            if (pendingEscrows.length === 0) return;
+        console.log("🔄 Iniciando polling para escrows pendientes...");
+        const interval = setInterval(() => {
+            console.log("🔄 Polling admin: actualizando estados...");
+            refreshEscrowStatuses();
+        }, 5000);
 
-            console.log(`🔍 Verificando ${pendingEscrows.length} escrows pendientes...`);
+        return () => clearInterval(interval);
+    }, [assets]);
 
+    // 🎯 Actualizar estados de milestones para mostrar indicador visual
+    const refreshEscrowStatuses = async () => {
+        const pendingEscrows = assets.filter(
+            a => a.status === "funding_requested" && (a.contractId || a.contract_id)
+        );
+
+        if (pendingEscrows.length === 0) return;
+
+        const contractIds = pendingEscrows
+            .map(a => a.contractId || a.contract_id)
+            .filter(Boolean) as string[];
+
+        try {
+            const escrowData = await getEscrowByContractIds({ contractIds });
+            const newStatuses: Record<string, any> = {};
+
+            escrowData.forEach((escrow: any) => {
+                const milestone = escrow?.milestones?.[0];
+                newStatuses[escrow.contractId] = {
+                    status: milestone?.status,
+                    approved: milestone?.approved || escrow?.flags?.approved,
+                    completed: milestone?.status === "completed",
+                };
+            });
+
+            setMilestoneStatuses(prev => ({ ...prev, ...newStatuses }));
+
+            // También verificar si alguno ya está liberado para actualizar BD
             for (const asset of pendingEscrows) {
                 const contractId = asset.contractId || asset.contract_id;
-                if (!contractId) continue;
-
-                try {
-                    const escrowData = await getEscrowByContractIds({ contractIds: [contractId] });
-                    if (escrowData && escrowData.length > 0) {
-                        const escrow = escrowData[0] as any;
-                        if (escrow?.status === "completed" || escrow?.status === "released") {
-                            console.log(`✅ Escrow ${contractId} ya liberado. Actualizando...`);
-                            await fetch(`/api/assets/${asset.id}`, {
-                                method: "PATCH",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ status: "funded" }),
-                            });
-                        }
-                    }
-                } catch (e) {
-                    console.error(`❌ Error verificando escrow ${contractId}:`, e);
+                const escrow = escrowData.find((e: any) => e.contractId === contractId) as any;
+                
+                if (escrow?.status === "completed" || escrow?.status === "released" || escrow?.flags?.released) {
+                    console.log(`✅ Escrow ${contractId} ya liberado. Actualizando BD...`);
+                    await fetch(`/api/assets/${asset.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ status: "funded" }),
+                    });
+                    await fetchAssets();
                 }
             }
-
-            // Recargar assets si se actualizó alguno
-            await fetchAssets();
-        };
-
-        if (assets.length > 0) {
-            checkEscrows();
+        } catch (e) {
+            console.error("❌ Error en refreshEscrowStatuses:", e);
         }
-    }, [assets.length]); // Solo cuando cambia la cantidad de assets
+    };
+
+    // Cargar estados iniciales de milestones
+    useEffect(() => {
+        if (assets.length > 0) {
+            refreshEscrowStatuses();
+        }
+    }, [assets.length]);
 
     const fetchAssets = async () => {
         try {
@@ -442,7 +480,7 @@ export default function CompanyDashboard() {
         }
     };
 
-    const handleSendFunds = async (asset: Asset) => {
+    const handleSendFunds = async (asset: Asset, attempt = 1) => {
         if (!address) {
             alert("Primero conectá la wallet de la empresa");
             return;
@@ -459,19 +497,53 @@ export default function CompanyDashboard() {
             return; // Ya está liberado, no hacer nada más
         }
 
-        const confirmed = await requestConfirm(
-            "¿Confirmás el envío de fondos al solicitante? Esta acción fondea y libera USDC."
-        );
-        if (!confirmed) return;
-
         setIsProcessing(asset.id);
         try {
+            console.log(`🚀 handleSendFunds - Intento ${attempt}`);
             const contractId = asset.contractId || asset.contract_id || "";
 
             const [escrowInfo] = await getEscrowByContractIds({
                 contractIds: [contractId],
                 validateOnChain: false,
             });
+
+            const milestone = (escrowInfo?.milestones || [])[0] as { status?: string; approved?: boolean } | undefined;
+            
+            // 🎯 Mostrar estado actual del milestone
+            console.log("📊 Estado del milestone:", {
+                status: milestone?.status,
+                approved: milestone?.approved,
+                flags: escrowInfo?.flags
+            });
+            
+            // Si el milestone ya está aprobado, podemos saltar el approve
+            const isMilestoneApproved = milestone?.approved || escrowInfo?.flags?.approved;
+            const isMilestoneCompleted = milestone?.status === "completed";
+            
+            if (!isMilestoneCompleted && !isMilestoneApproved) {
+                showAlert("⏳ El borrower debe marcar el milestone como completado antes de liberar fondos.\n\nEsperá a que el borrower haga click en 'Marcar completado' en su dashboard.");
+                return;
+            }
+            
+            if (isMilestoneApproved) {
+                console.log("✅ Milestone ya está aprobado, se saltará el paso de approve");
+            }
+
+            if (escrowInfo?.flags?.released) {
+                showAlert("Este escrow ya fue liberado.");
+                return;
+            }
+
+            const balances = await getMultipleBalances({ addresses: [contractId] });
+            const currentBalance = balances?.[0]?.balance || 0;
+
+            const confirmMessage =
+                currentBalance > 0
+                    ? "El escrow ya está fondeado. Se aprobará el milestone y se liberarán los fondos."
+                    : "¿Confirmás el envío de fondos al solicitante? Esta acción fondea y libera USDC.";
+
+            const confirmed = await requestConfirm(confirmMessage);
+            if (!confirmed) return;
 
             const approverAddress = escrowInfo?.roles?.approver;
             const releaseSignerAddress = escrowInfo?.roles?.releaseSigner;
@@ -486,33 +558,41 @@ export default function CompanyDashboard() {
                 return;
             }
 
-            const fundResponse = await fundEscrow(
-                {
-                    amount: asset.value,
-                    contractId,
-                    signer: address,
-                },
-                "single-release"
-            );
+            if (currentBalance <= 0) {
+                const fundResponse = await fundEscrow(
+                    {
+                        amount: asset.value,
+                        contractId,
+                        signer: address,
+                    },
+                    "single-release"
+                );
 
-            if (fundResponse?.status === "FAILED") {
-                console.error("Trustless Work: fundEscrow FAILED", fundResponse);
-                throw new Error("Respuesta FAILED al fondear escrow");
-            }
+                if (fundResponse?.status === "FAILED") {
+                    console.error("Trustless Work: fundEscrow FAILED", fundResponse);
+                    throw new Error("Respuesta FAILED al fondear escrow");
+                }
 
-            if (!fundResponse?.unsignedTransaction) {
-                throw new Error("No se recibio la transaccion de fondeo");
-            }
+                if (!fundResponse?.unsignedTransaction) {
+                    throw new Error("No se recibio la transaccion de fondeo");
+                }
 
-            const fundSend = await signAndSendXdr(fundResponse.unsignedTransaction);
-            if (!fundSend || fundSend.status !== "SUCCESS") {
-                console.error("Trustless Work: sendTransaction (fund) FAILED", fundSend);
-                throw new Error("No se pudo enviar la transaccion de fondeo");
+                const fundSend = await signAndSendXdr(fundResponse.unsignedTransaction);
+                if (!fundSend || fundSend.status !== "SUCCESS") {
+                    console.error("Trustless Work: sendTransaction (fund) FAILED", fundSend);
+                    throw new Error("No se pudo enviar la transaccion de fondeo");
+                }
             }
 
             // PASO 2: Aprobar milestone (con manejo de "already approved")
-            let approveSuccess = false;
+            let approveSuccess = isMilestoneApproved; // ✅ Si ya está aprobado, saltamos este paso
+            
+            if (isMilestoneApproved) {
+                console.log("⏭️ Saltando approveMilestone - ya está aprobado");
+            }
+            
             try {
+                if (!approveSuccess) {
                 const approveResponse = await approveMilestone(
                     {
                         contractId,
@@ -542,6 +622,7 @@ export default function CompanyDashboard() {
                     }
                     approveSuccess = true;
                 }
+                }  // ✅ Cierre del if (!approveSuccess)
             } catch (error: any) {
                 if (error.message?.includes("already been approved")) {
                     console.log("⚠️ Milestone ya estaba aprobado (catch), continuando...");
@@ -611,13 +692,24 @@ export default function CompanyDashboard() {
                 showAlert("✅ Fondos enviados correctamente al solicitante", "Listo");
             }
         } catch (error) {
+            const MAX_RETRIES = 3;
+            
+            // 🔄 Auto-retry: si falla pero no terminó, reintentar automáticamente
+            if (attempt < MAX_RETRIES) {
+                console.log(`🔄 Error en intento ${attempt}, reintentando automáticamente (${attempt + 1}/${MAX_RETRIES})...`);
+                setIsProcessing(null);
+                await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2 segundos
+                return handleSendFunds(asset, attempt + 1);
+            }
+            
+            // Si ya agotó los reintentos, mostrar error
             const err = error as { response?: { status?: number; data?: unknown } };
             if (err?.response) {
                 console.error("Trustless Work: send funds response", err.response.status, err.response.data);
-                showAlert(`Error enviando fondos. Status ${err.response.status}`);
+                showAlert(`Error enviando fondos después de ${MAX_RETRIES} intentos. Status ${err.response.status}`);
             } else {
                 console.error("Error:", error);
-                showAlert("Error enviando fondos. Revisá la consola.");
+                showAlert(`Error enviando fondos después de ${MAX_RETRIES} intentos. Revisá la consola.`);
             }
         } finally {
             setIsProcessing(null);
@@ -729,18 +821,47 @@ export default function CompanyDashboard() {
             )}
 
             {asset.status === "funding_requested" && (
-                <button
-                    onClick={() => handleSendFunds(asset)}
-                    disabled={isProcessing === asset.id || !address}
-                    className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-lg font-bold text-sm hover:from-green-500 hover:to-emerald-400 transition-all shadow-lg shadow-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                    {isProcessing === asset.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                        <Check className="w-4 h-4" />
-                    )}
-                    Enviar Fondos
-                </button>
+                <div className="flex flex-col gap-2">
+                    {/* 🎯 Indicador de estado del milestone */}
+                    {(() => {
+                        const contractId = asset.contractId || asset.contract_id;
+                        const ms = contractId ? milestoneStatuses[contractId] : null;
+                        if (ms?.approved) {
+                            return (
+                                <span className="text-xs text-emerald-400 flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3" /> 
+                                    Milestone aprobado - Listo para liberar
+                                </span>
+                            );
+                        } else if (ms?.completed) {
+                            return (
+                                <span className="text-xs text-blue-400 flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3" /> 
+                                    Milestone completado - Pendiente de aprobación
+                                </span>
+                            );
+                        } else {
+                            return (
+                                <span className="text-xs text-yellow-400 flex items-center gap-1">
+                                    <Loader2 className="w-3 h-3 animate-spin" /> 
+                                    Esperando que borrower marque completado...
+                                </span>
+                            );
+                        }
+                    })()}
+                    <button
+                        onClick={() => handleSendFunds(asset)}
+                        disabled={isProcessing === asset.id || !address}
+                        className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-lg font-bold text-sm hover:from-green-500 hover:to-emerald-400 transition-all shadow-lg shadow-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                        {isProcessing === asset.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <Check className="w-4 h-4" />
+                        )}
+                        Enviar Fondos
+                    </button>
+                </div>
             )}
 
             {asset.status === "funded" && (
@@ -1151,15 +1272,50 @@ export default function CompanyDashboard() {
             </AnimatePresence>
 
             {modalState.open && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
-                    <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-950/95 p-6 shadow-2xl">
-                        <div className="mb-3 text-lg font-bold text-white font-[family-name:var(--font-syne)]">
-                            {modalState.title}
+                <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm px-4"
+                >
+                    <motion.div 
+                        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                        animate={{ scale: 1, opacity: 1, y: 0 }}
+                        exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                        transition={{ type: "spring", duration: 0.4 }}
+                        className="w-full max-w-md rounded-[2rem] border border-white/10 bg-slate-900 p-8 shadow-2xl shadow-blue-500/10"
+                    >
+                        {/* Icono según el tipo de mensaje */}
+                        <div className="flex justify-center mb-6">
+                            {modalState.title.toLowerCase().includes('error') || modalState.message?.includes('❌') ? (
+                                <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center">
+                                    <XCircle className="w-8 h-8 text-red-500" />
+                                </div>
+                            ) : modalState.title.toLowerCase().includes('éxito') || modalState.title.toLowerCase().includes('listo') || modalState.message?.includes('✅') ? (
+                                <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center">
+                                    <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                                </div>
+                            ) : modalState.title.toLowerCase().includes('advertencia') || modalState.message?.includes('⚠️') ? (
+                                <div className="w-16 h-16 bg-yellow-500/10 rounded-full flex items-center justify-center">
+                                    <AlertTriangle className="w-8 h-8 text-yellow-500" />
+                                </div>
+                            ) : (
+                                <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center">
+                                    <Info className="w-8 h-8 text-blue-500" />
+                                </div>
+                            )}
                         </div>
-                        <p className="text-sm text-slate-300 leading-relaxed">
-                            {modalState.message}
-                        </p>
-                        <div className="mt-6 flex justify-end gap-3">
+
+                        <div className="text-center mb-6">
+                            <h3 className="text-xl font-bold text-white font-[family-name:var(--font-syne)] mb-2">
+                                {modalState.title}
+                            </h3>
+                            <p className="text-sm text-slate-400 leading-relaxed whitespace-pre-line">
+                                {modalState.message}
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-3">
                             {!modalState.hideCancel && (
                                 <button
                                     onClick={() => {
@@ -1167,7 +1323,7 @@ export default function CompanyDashboard() {
                                         modalResolverRef.current?.(false);
                                         modalResolverRef.current = null;
                                     }}
-                                    className="px-4 py-2 rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                                    className="flex-1 px-4 py-3 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors font-medium"
                                 >
                                     {modalState.cancelLabel}
                                 </button>
@@ -1178,13 +1334,19 @@ export default function CompanyDashboard() {
                                     modalResolverRef.current?.(true);
                                     modalResolverRef.current = null;
                                 }}
-                                className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-500 transition-colors"
+                                className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all shadow-lg ${
+                                    modalState.title.toLowerCase().includes('error')
+                                        ? 'bg-red-600 text-white hover:bg-red-500 shadow-red-500/20'
+                                        : modalState.title.toLowerCase().includes('éxito') || modalState.title.toLowerCase().includes('listo')
+                                        ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-500/20'
+                                        : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20'
+                                }`}
                             >
                                 {modalState.confirmLabel}
                             </button>
                         </div>
-                    </div>
-                </div>
+                    </motion.div>
+                </motion.div>
             )}
         </div>
     );

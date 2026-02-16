@@ -1,7 +1,13 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@/hooks/useWallet";
+import {
+    useChangeMilestoneStatus,
+    useSendTransaction,
+    useGetEscrowFromIndexerByContractIds,
+} from "@trustless-work/escrow";
+import * as freighterApi from "@stellar/freighter-api";
 import { v4 as uuidv4 } from "uuid";
 import { Rocket, LogOut, Loader2, ArrowLeft, Plus, CheckCircle2, ShieldCheck, Tractor, Building2, Car, Coins, Check, X, AlertCircle, FileText, Upload } from "lucide-react";
 import FileUpload from "@/components/FileUpload";
@@ -35,6 +41,30 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [tempAssetId, setTempAssetId] = useState<string>("");
+    const [completedMilestones, setCompletedMilestones] = useState<Set<string>>(new Set());
+    const [modalState, setModalState] = useState({
+        open: false,
+        title: "",
+        message: "",
+        confirmLabel: "Aceptar",
+    });
+    const modalResolverRef = useRef<((value: boolean) => void) | null>(null);
+
+    const { changeMilestoneStatus } = useChangeMilestoneStatus();
+    const { sendTransaction } = useSendTransaction();
+    const { getEscrowByContractIds } = useGetEscrowFromIndexerByContractIds();
+
+    const testnetPassphrase = "Test SDF Network ; September 2015";
+    const freighter = freighterApi.default ? freighterApi.default : freighterApi;
+
+    const showAlert = (message: string, title = "Aviso") => {
+        setModalState({
+            open: true,
+            title,
+            message,
+            confirmLabel: "Aceptar",
+        });
+    };
 
     // Cargar assets desde Supabase (filtrados por wallet del usuario)
     useEffect(() => {
@@ -42,6 +72,22 @@ export default function Dashboard() {
             fetchAssets();
         }
     }, [address]);
+
+    // 🔄 Polling automático cada 5 segundos para escrows en funding_requested
+    useEffect(() => {
+        if (!address) return;
+        
+        const hasPendingEscrows = assets.some(a => a.status === 'funding_requested');
+        if (!hasPendingEscrows) return;
+
+        console.log("🔄 Iniciando polling para escrows pendientes...");
+        const interval = setInterval(() => {
+            console.log("🔄 Polling: actualizando estado de milestones...");
+            fetchAssets();
+        }, 5000);
+
+        return () => clearInterval(interval);
+    }, [address, assets]);
 
     // Cargar datos del usuario desde localStorage cuando se conecta la wallet
     useEffect(() => {
@@ -57,6 +103,40 @@ export default function Dashboard() {
         }
     }, [address]);
 
+    const loadMilestoneStates = async (items: Asset[]) => {
+        const contractIds = items
+            .map((asset) => asset.contractId || asset.contract_id)
+            .filter((id): id is string => Boolean(id));
+
+        if (contractIds.length === 0) return;
+
+        try {
+            const escrows = await getEscrowByContractIds({
+                contractIds,
+                validateOnChain: false,
+            });
+
+            const completed = new Set<string>();
+            items.forEach((asset) => {
+                const contractId = asset.contractId || asset.contract_id;
+                if (!contractId) return;
+
+                const escrowInfo = escrows.find((escrow) => escrow.contractId === contractId);
+                const milestone = (escrowInfo?.milestones || [])[0] as
+                    | { status?: string; approved?: boolean }
+                    | undefined;
+
+                if (milestone?.status === "completed" || milestone?.approved) {
+                    completed.add(asset.id);
+                }
+            });
+
+            setCompletedMilestones(completed);
+        } catch (error) {
+            console.error("Error fetching milestone state:", error);
+        }
+    };
+
     const fetchAssets = async () => {
         if (!address) return;
 
@@ -69,6 +149,7 @@ export default function Dashboard() {
                     asset.owner_wallet === address || asset.ownerWallet === address
                 );
                 setAssets(myAssets);
+                await loadMilestoneStates(myAssets);
             }
         } catch (error) {
             console.error('Error fetching assets:', error);
@@ -96,6 +177,24 @@ export default function Dashboard() {
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isProcess, setIsProcess] = useState<string | null>(null);
+
+    const signAndSendXdr = async (unsignedXdr: string) => {
+        const signed = await freighter.signTransaction(unsignedXdr, {
+            networkPassphrase: testnetPassphrase,
+        });
+
+        const signedAny = signed as { signedTxXdr?: string; signedXDR?: string; xdr?: string };
+        const signedXdr =
+            typeof signed === "string"
+                ? signed
+                : signedAny?.signedTxXdr || signedAny?.signedXDR || signedAny?.xdr;
+
+        if (!signedXdr) {
+            throw new Error("No se pudo firmar la transacción");
+        }
+
+        return sendTransaction(signedXdr);
+    };
 
     // Authentication Check
     if (isConnecting) return <div className="min-h-screen flex items-center justify-center bg-[#020617]"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
@@ -131,9 +230,9 @@ export default function Dashboard() {
     // Handlers
     const handleSubmitForReview = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newAsset.legalCheck) return alert("Debes aceptar la declaración jurada.");
-        if (!newAsset.insuranceDoc) return alert("Debes subir el seguro del activo.");
-        if (!newAsset.propertyDoc) return alert("Debes subir el título de propiedad.");
+        if (!newAsset.legalCheck) return showAlert("Debes aceptar la declaración jurada.");
+        if (!newAsset.insuranceDoc) return showAlert("Debes subir el seguro del activo.");
+        if (!newAsset.propertyDoc) return showAlert("Debes subir el título de propiedad.");
 
         setIsSubmitting(true);
         // Guardar en Supabase
@@ -175,7 +274,7 @@ export default function Dashboard() {
             setNewAsset({ type: 'tractor', name: '', value: '', owner: newAsset.owner, legalCheck: false });
         } catch (error) {
             console.error('Error:', error);
-            alert('Error guardando el activo. Intentá de nuevo.');
+            showAlert('Error guardando el activo. Intentá de nuevo.');
             setIsSubmitting(false);
         }
     };
@@ -195,6 +294,95 @@ export default function Dashboard() {
             case 'funded': return <div className="px-3 py-1 rounded-full text-xs font-bold border bg-green-500/10 text-green-500 border-green-500/20 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> COMPLETADO</div>;
         }
     }
+
+    const handleMarkCompleted = async (asset: Asset, attempt = 1) => {
+        if (!address) return;
+        if (!asset.contractId && !asset.contract_id) {
+            showAlert("Este activo no tiene escrow asociado");
+            return;
+        }
+
+        setIsProcess(asset.id);
+        try {
+            const contractId = asset.contractId || asset.contract_id || "";
+            const [escrowInfo] = await getEscrowByContractIds({
+                contractIds: [contractId],
+                validateOnChain: false,
+            });
+
+            const serviceProviderAddress = escrowInfo?.roles?.serviceProvider;
+            if (serviceProviderAddress && serviceProviderAddress !== address) {
+                showAlert("Esta wallet no es el service provider del escrow");
+                return;
+            }
+
+            // 🎯 Verificar si el milestone ya está completado
+            const milestone = escrowInfo?.milestones?.[0] as any;
+            if (milestone?.status === "completed" || milestone?.approved) {
+                console.log("✅ Milestone ya estaba completado");
+                setCompletedMilestones((prev) => new Set(prev).add(asset.id));
+                showAlert("✅ Milestone ya estaba completado", "Listo");
+                return;
+            }
+
+            const response = await changeMilestoneStatus(
+                {
+                    contractId,
+                    milestoneIndex: "0",
+                    newStatus: "completed",
+                    newEvidence: "",
+                    serviceProvider: address,
+                },
+                "single-release"
+            );
+
+            // 🔄 Manejar "already completed" como éxito
+            if (response?.status === "FAILED") {
+                const errorMsg = JSON.stringify(response);
+                if (errorMsg.includes("already") || errorMsg.includes("completed")) {
+                    console.log("⚠️ Milestone ya completado (API), marcando como éxito...");
+                    setCompletedMilestones((prev) => new Set(prev).add(asset.id));
+                    showAlert("✅ Milestone ya estaba completado", "Listo");
+                    return;
+                }
+                throw new Error("Error en changeMilestoneStatus: " + errorMsg);
+            }
+
+            if (!response?.unsignedTransaction) {
+                throw new Error("No se recibió la transacción de milestone");
+            }
+
+            const sendResponse = await signAndSendXdr(response.unsignedTransaction);
+            if (!sendResponse || sendResponse.status !== "SUCCESS") {
+                throw new Error("No se pudo enviar la transacción del milestone");
+            }
+
+            setCompletedMilestones((prev) => new Set(prev).add(asset.id));
+            showAlert("✅ Milestone marcado como completado", "Listo");
+        } catch (error: any) {
+            const MAX_RETRIES = 2;
+            const errorMsg = error?.message || "";
+            
+            // 🔄 Si es "already completed", tratar como éxito
+            if (errorMsg.includes("already") || errorMsg.includes("completed")) {
+                console.log("⚠️ Milestone ya completado (catch)");
+                setCompletedMilestones((prev) => new Set(prev).add(asset.id));
+                showAlert("✅ Milestone ya estaba completado", "Listo");
+            } 
+            // 🔄 Auto-retry para otros errores
+            else if (attempt < MAX_RETRIES) {
+                console.log(`🔄 Reintentando handleMarkCompleted (${attempt + 1}/${MAX_RETRIES})...`);
+                setIsProcess(null);
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                return handleMarkCompleted(asset, attempt + 1);
+            } else {
+                console.error("Error:", error);
+                showAlert("Error marcando el milestone después de varios intentos. Revisá la consola.");
+            }
+        } finally {
+            setIsProcess(null);
+        }
+    };
 
     return (
         <div className="min-h-screen bg-[#020617] font-sans text-slate-50 relative overflow-hidden">
@@ -302,8 +490,37 @@ export default function Dashboard() {
                                 )}
 
                                 {asset.status === 'funding_requested' && (
-                                    <div className="w-full bg-blue-500/10 border border-blue-500/20 text-blue-500 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2">
-                                        <Rocket className="w-4 h-4" /> Esperando liberación de fondos
+                                    <div className="w-full space-y-3">
+                                        <div className="w-full bg-blue-500/10 border border-blue-500/20 text-blue-500 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2">
+                                            <Rocket className="w-4 h-4" /> 
+                                            {completedMilestones.has(asset.id) 
+                                                ? "Milestone completado - Esperando admin" 
+                                                : "Esperando liberación de fondos"}
+                                        </div>
+                                        <button
+                                            onClick={() => handleMarkCompleted(asset)}
+                                            disabled={isProcess === asset.id || completedMilestones.has(asset.id)}
+                                            className="w-full bg-emerald-600/10 border border-emerald-500/20 text-emerald-300 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-emerald-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isProcess === asset.id ? (
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                            ) : completedMilestones.has(asset.id) ? (
+                                                <>
+                                                    <CheckCircle2 className="w-4 h-4" />
+                                                    Completado - Pendiente de aprobación
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Check className="w-4 h-4" />
+                                                    Marcar completado
+                                                </>
+                                            )}
+                                        </button>
+                                        {completedMilestones.has(asset.id) && (
+                                            <p className="text-xs text-slate-400 text-center">
+                                                ✅ Ya marcaste este milestone. El admin puede ahora enviar los fondos.
+                                            </p>
+                                        )}
                                     </div>
                                 )}
 
@@ -468,6 +685,30 @@ export default function Dashboard() {
                     )}
                 </AnimatePresence>
             </main>
+            {modalState.open && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
+                    <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-950/95 p-6 shadow-2xl">
+                        <div className="mb-3 text-lg font-bold text-white font-[family-name:var(--font-syne)]">
+                            {modalState.title}
+                        </div>
+                        <p className="text-sm text-slate-300 leading-relaxed">
+                            {modalState.message}
+                        </p>
+                        <div className="mt-6 flex justify-end">
+                            <button
+                                onClick={() => {
+                                    setModalState((prev) => ({ ...prev, open: false }));
+                                    modalResolverRef.current?.(true);
+                                    modalResolverRef.current = null;
+                                }}
+                                className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-500 transition-colors"
+                            >
+                                {modalState.confirmLabel}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -2,52 +2,38 @@
 
 import { useState } from "react";
 import { useWallet } from "@/hooks/useWallet";
-import {
-    useReleaseFunds,
-    useSendTransaction,
-    useGetEscrowFromIndexerByContractIds,
-    useGetMultipleEscrowBalances,
-} from "@trustless-work/escrow";
+import { useReleaseFunds, useSendTransaction, useGetEscrowFromIndexerByContractIds } from "@trustless-work/escrow";
 import * as freighterApi from "@stellar/freighter-api";
 import { Loader2, AlertCircle, CheckCircle, Wallet } from "lucide-react";
 import { motion } from "framer-motion";
 
-export default function RecoverFunds() {
+export default function RecoverExcess() {
     const { address, connect, isConnecting } = useWallet();
     const { releaseFunds } = useReleaseFunds();
     const { sendTransaction } = useSendTransaction();
     const { getEscrowByContractIds } = useGetEscrowFromIndexerByContractIds();
-    const { getMultipleBalances } = useGetMultipleEscrowBalances();
-    const [contractId, setContractId] = useState("CD3SMJVDHJ5H2BYADHOUTIDWMJCRCWS46K5FKKC6TD46AVQOX3LI7HDV");
+    
+    // Contract ID del escrow con doble fondeo (500 + 500 = 1000)
+    const [contractId, setContractId] = useState("CCY5SY3PE5UKTSJSWKR5SOYBRLUBJW3BFHJMXBIEEIOSWIL45ACJWBYC");
     const [loading, setLoading] = useState(false);
-    const [checking, setChecking] = useState(false);
     const [result, setResult] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [escrowInfo, setEscrowInfo] = useState<any | null>(null);
-    const [escrowBalance, setEscrowBalance] = useState<number | null>(null);
+    const [escrowInfo, setEscrowInfo] = useState<any>(null);
 
     const freighter = freighterApi.default ? freighterApi.default : freighterApi;
     const testnetPassphrase = "Test SDF Network ; September 2015";
 
-    const handleCheckStatus = async () => {
+    const checkEscrowStatus = async () => {
         if (!contractId) return;
-        setChecking(true);
-        setError(null);
+        
         try {
-            const [info] = await getEscrowByContractIds({
-                contractIds: [contractId],
-                validateOnChain: false,
-            });
-            setEscrowInfo(info || null);
-
-            const balances = await getMultipleBalances({ addresses: [contractId] });
-            const balance = balances?.[0]?.balance ?? null;
-            setEscrowBalance(balance);
-        } catch (err: any) {
-            console.error("❌ Error status:", err);
-            setError(err.message || "Error consultando estado");
-        } finally {
-            setChecking(false);
+            const data = await getEscrowByContractIds({ contractIds: [contractId] });
+            if (data && data.length > 0) {
+                setEscrowInfo(data[0]);
+                console.log("Info del escrow:", data[0]);
+            }
+        } catch (e) {
+            console.error("Error consultando escrow:", e);
         }
     };
 
@@ -62,8 +48,10 @@ export default function RecoverFunds() {
         setError(null);
 
         try {
-            console.log("🔓 Intentando liberar fondos del contrato:", contractId);
+            console.log("🔓 Intentando liberar excedente del contrato:", contractId);
 
+            // Intentar liberar los fondos (los 1000 USDC irán al borrower)
+            // Luego el borrower puede devolver los 500 extra manualmente
             const releaseResponse = await releaseFunds(
                 {
                     contractId,
@@ -75,10 +63,14 @@ export default function RecoverFunds() {
             console.log("📥 Respuesta de releaseFunds:", releaseResponse);
 
             if (releaseResponse?.status === "FAILED") {
-                console.error("❌ Release FAILED:", releaseResponse);
-                setError("El release falló. El contrato puede estar en estado inválido.");
-                setLoading(false);
-                return;
+                // Si falla porque ya está liberado, eso está bien
+                const errorMsg = JSON.stringify(releaseResponse);
+                if (errorMsg.includes("already released") || errorMsg.includes("completed")) {
+                    setResult("✅ El escrow ya estaba liberado.");
+                    setLoading(false);
+                    return;
+                }
+                throw new Error("Release failed: " + errorMsg);
             }
 
             if (!releaseResponse?.unsignedTransaction) {
@@ -103,12 +95,12 @@ export default function RecoverFunds() {
 
             // Enviar
             const sendResponse = await sendTransaction(signedXdr);
-            console.log("📤 Respuesta de sendTransaction:", sendResponse);
+            console.log("📤 Respuesta:", sendResponse);
 
             if (sendResponse?.status === "SUCCESS") {
-                setResult("✅ ¡Fondos liberados exitosamente! Revisá tu wallet en unos segundos.");
+                setResult("✅ ¡Fondos liberados! Los 1000 USDC fueron al borrower.");
             } else {
-                setError("La transacción no se completó: " + JSON.stringify(sendResponse));
+                setError("La transacción no se completó");
             }
         } catch (err: any) {
             console.error("❌ Error:", err);
@@ -129,9 +121,10 @@ export default function RecoverFunds() {
                     <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                         <AlertCircle className="w-8 h-8 text-yellow-500" />
                     </div>
-                    <h1 className="text-2xl font-bold mb-2">Recuperación de Fondos</h1>
+                    <h1 className="text-2xl font-bold mb-2">Recuperar Excedente</h1>
                     <p className="text-slate-400">
-                        Verificá el estado del escrow y luego intentá liberar fondos.
+                        El escrow de 500 USDC tiene 1000 USDC (doble fondeo).<br/>
+                        Liberar los fondos para recuperar el excedente.
                     </p>
                 </div>
 
@@ -147,7 +140,7 @@ export default function RecoverFunds() {
                 ) : (
                     <div className="space-y-4">
                         <div className="bg-slate-800/50 p-4 rounded-xl">
-                            <label className="text-sm text-slate-400 block mb-2">Contract ID del Escrow</label>
+                            <label className="text-sm text-slate-400 block mb-2">Contract ID</label>
                             <input
                                 type="text"
                                 value={contractId}
@@ -156,28 +149,30 @@ export default function RecoverFunds() {
                             />
                         </div>
 
+                        <button
+                            onClick={checkEscrowStatus}
+                            className="w-full bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg text-sm"
+                        >
+                            Verificar Estado del Escrow
+                        </button>
+
+                        {escrowInfo && (
+                            <div className="bg-slate-800/30 p-4 rounded-xl text-sm">
+                                <p><strong>Estado:</strong> {escrowInfo.status}</p>
+                                <p><strong>Monto:</strong> {escrowInfo.amount} {escrowInfo.trustline?.symbol}</p>
+                                <p><strong>Receiver:</strong> {escrowInfo.roles?.receiver?.substring(0, 10)}...</p>
+                            </div>
+                        )}
+
                         <div className="bg-slate-800/30 p-4 rounded-xl text-sm text-slate-400">
                             <p><strong>Wallet conectada:</strong></p>
                             <p className="font-mono text-xs mt-1">{address}</p>
                         </div>
 
-                        <button
-                            onClick={handleCheckStatus}
-                            disabled={checking}
-                            className="w-full bg-slate-800 hover:bg-slate-700 disabled:bg-slate-700 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
-                        >
-                            {checking ? (
-                                <>
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                    Consultando...
-                                </>
-                            ) : (
-                                <>
-                                    <AlertCircle className="w-5 h-5" />
-                                    Ver estado del escrow
-                                </>
-                            )}
-                        </button>
+                        <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl text-sm text-yellow-400">
+                            <strong>⚠️ Importante:</strong> Al liberar, los 1000 USDC irán al borrower. 
+                            Luego deberás coordinar con el borrower para que te devuelva los 500 USDC extra.
+                        </div>
 
                         <button
                             onClick={handleRecover}
@@ -192,23 +187,10 @@ export default function RecoverFunds() {
                             ) : (
                                 <>
                                     <CheckCircle className="w-5 h-5" />
-                                    Liberar fondos
+                                    Liberar 1000 USDC
                                 </>
                             )}
                         </button>
-                    </div>
-                )}
-
-                {escrowInfo && (
-                    <div className="mt-4 p-4 bg-slate-900/70 border border-white/10 rounded-xl text-sm text-slate-300 space-y-2">
-                        <div className="font-bold text-white">Estado del escrow</div>
-                        <div><span className="text-slate-400">Contract:</span> <span className="font-mono text-xs">{escrowInfo.contractId}</span></div>
-                        <div><span className="text-slate-400">Released:</span> {String(escrowInfo.flags?.released)}</div>
-                        <div><span className="text-slate-400">Disputed:</span> {String(escrowInfo.flags?.disputed)}</div>
-                        <div><span className="text-slate-400">Resolved:</span> {String(escrowInfo.flags?.resolved)}</div>
-                        <div><span className="text-slate-400">Milestone status:</span> {escrowInfo.milestones?.[0]?.status || ""}</div>
-                        <div><span className="text-slate-400">Milestone approved:</span> {String(escrowInfo.milestones?.[0]?.approved)}</div>
-                        <div><span className="text-slate-400">Escrow balance:</span> {escrowBalance ?? "-"} USDC</div>
                     </div>
                 )}
 
