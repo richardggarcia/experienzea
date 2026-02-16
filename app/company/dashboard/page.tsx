@@ -10,6 +10,7 @@ import {
     useReleaseFunds,
     useSendTransaction,
     useGetEscrowsFromIndexerBySigner,
+    useGetEscrowFromIndexerByContractIds,
     useApproveMilestone,
 } from "@trustless-work/escrow";
 import * as freighterApi from "@stellar/freighter-api";
@@ -71,6 +72,7 @@ export default function CompanyDashboard() {
     const { releaseFunds } = useReleaseFunds();
     const { sendTransaction } = useSendTransaction();
     const { getEscrowsBySigner } = useGetEscrowsFromIndexerBySigner();
+    const { getEscrowByContractIds } = useGetEscrowFromIndexerByContractIds();
     const { approveMilestone } = useApproveMilestone();
 
     const usdcIssuer = process.env.NEXT_PUBLIC_USDC_ISSUER || "";
@@ -117,6 +119,10 @@ export default function CompanyDashboard() {
                 const message = err?.response?.data?.message || "";
                 if (err?.response) {
                     console.error("Trustless Work: sendTransaction response", err.response.data);
+                    console.error(
+                        "Trustless Work: sendTransaction response (json)",
+                        JSON.stringify(err.response.data)
+                    );
                 }
                 const shouldRetry = message.includes("resultMetaXdr");
 
@@ -341,6 +347,24 @@ export default function CompanyDashboard() {
         try {
             const contractId = asset.contractId || asset.contract_id || "";
 
+            const [escrowInfo] = await getEscrowByContractIds({
+                contractIds: [contractId],
+                validateOnChain: false,
+            });
+
+            const approverAddress = escrowInfo?.roles?.approver;
+            const releaseSignerAddress = escrowInfo?.roles?.releaseSigner;
+
+            if (approverAddress && approverAddress !== address) {
+                alert("Esta wallet no es el aprobador del escrow. Usá la wallet del aprobador.");
+                return;
+            }
+
+            if (releaseSignerAddress && releaseSignerAddress !== address) {
+                alert("Esta wallet no es el release signer del escrow. Usá la wallet correcta.");
+                return;
+            }
+
             const fundResponse = await fundEscrow(
                 {
                     amount: asset.value,
@@ -369,7 +393,7 @@ export default function CompanyDashboard() {
                 {
                     contractId,
                     milestoneIndex: "0",
-                    approver: address,
+                    approver: approverAddress || address,
                 },
                 "single-release"
             );
