@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Coins, ArrowRight } from "lucide-react";
 
@@ -7,6 +7,7 @@ export default function LoanCalculator() {
     const [assetValue, setAssetValue] = useState(10000);
     const ltv = 0.70; // 70% LTV
     const loanAmount = assetValue * ltv;
+    const formatter = useMemo(() => new Intl.NumberFormat("en-US"), []);
 
     return (
         <div className="bg-slate-900/40 backdrop-blur-xl border border-blue-500/20 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden group">
@@ -27,7 +28,7 @@ export default function LoanCalculator() {
                 <div className="mb-10">
                     <div className="flex justify-between text-sm mb-4 font-bold">
                         <span className="text-slate-400 uppercase tracking-wider">Valor del Activo</span>
-                        <span className="text-white bg-slate-800 px-3 py-1 rounded-lg border border-slate-700">${assetValue.toLocaleString()} USD</span>
+                        <span className="text-white bg-slate-800 px-3 py-1 rounded-lg border border-slate-700">${formatter.format(assetValue)} USD</span>
                     </div>
                     <input
                         type="range"
@@ -49,7 +50,7 @@ export default function LoanCalculator() {
                     <div className="absolute inset-0 bg-blue-600/5 animate-pulse"></div>
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2 relative z-10">Podés recibir hasta</p>
                     <p className="text-5xl font-bold text-white relative z-10 font-[family-name:var(--font-syne)] tracking-tight">
-                        ${loanAmount.toLocaleString()} <span className="text-lg text-blue-400 font-normal">USDC</span>
+                        ${formatter.format(loanAmount)} <span className="text-lg text-blue-400 font-normal">USDC</span>
                     </p>
                 </div>
 

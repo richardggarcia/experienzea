@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@/hooks/useWallet";
@@ -66,6 +66,15 @@ export default function CompanyDashboard() {
     const [loading, setLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+    const [modalState, setModalState] = useState({
+        open: false,
+        title: "",
+        message: "",
+        confirmLabel: "Aceptar",
+        cancelLabel: "Cancelar",
+        hideCancel: false,
+    });
+    const modalResolverRef = useRef<((value: boolean) => void) | null>(null);
 
     const { deployEscrow } = useInitializeEscrow();
     const { fundEscrow } = useFundEscrow();
@@ -75,11 +84,74 @@ export default function CompanyDashboard() {
     const { getEscrowByContractIds } = useGetEscrowFromIndexerByContractIds();
     const { approveMilestone } = useApproveMilestone();
 
+    // Verificar si el escrow ya fue liberado en la blockchain
+    const verifyEscrowStatus = async (asset: Asset): Promise<boolean> => {
+        const contractId = asset.contractId || asset.contract_id;
+        if (!contractId) return false;
+
+        try {
+            console.log("🔍 Verificando estado real del escrow:", contractId);
+            const escrowData = await getEscrowByContractIds({ contractIds: [contractId] });
+            console.log("📊 Estado del escrow:", escrowData);
+
+            if (escrowData && escrowData.length > 0) {
+                const escrow = escrowData[0] as any;
+                
+                // Si el escrow está completado/released pero la DB dice funding_requested
+                if (escrow?.status === "completed" || escrow?.status === "released") {
+                    console.log("✅ El escrow ya está liberado. Actualizando BD...");
+                    
+                    // Actualizar la base de datos automáticamente
+                    const response = await fetch(`/api/assets/${asset.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ status: "funded" }),
+                    });
+
+                    if (response.ok) {
+                        await fetchAssets();
+                        showAlert("Los fondos ya fueron liberados anteriormente. El estado se ha actualizado.", "Escrow ya liberado");
+                        return true;
+                    }
+                }
+            }
+            return false;
+        } catch (error) {
+            console.error("❌ Error verificando escrow:", error);
+            return false;
+        }
+    };
+
     const usdcIssuer = process.env.NEXT_PUBLIC_USDC_ISSUER || "";
     const usdcSymbol = process.env.NEXT_PUBLIC_USDC_SYMBOL || "USDC";
     const testnetPassphrase = "Test SDF Network ; September 2015";
 
     const freighter = freighterApi.default ? freighterApi.default : freighterApi;
+
+    const showAlert = (message: string, title = "Aviso") => {
+        setModalState({
+            open: true,
+            title,
+            message,
+            confirmLabel: "Aceptar",
+            cancelLabel: "",
+            hideCancel: true,
+        });
+    };
+
+    const requestConfirm = (message: string, title = "Confirmar") => {
+        return new Promise<boolean>((resolve) => {
+            modalResolverRef.current = resolve;
+            setModalState({
+                open: true,
+                title,
+                message,
+                confirmLabel: "Aceptar",
+                cancelLabel: "Cancelar",
+                hideCancel: false,
+            });
+        });
+    };
 
     const signAndSendXdr = async (unsignedXdr: string) => {
         // Verificar que Freighter esté en Testnet
@@ -88,7 +160,7 @@ export default function CompanyDashboard() {
             console.log("🌐 Red de Freighter:", networkResult);
             const networkStr = typeof networkResult === 'string' ? networkResult : networkResult?.network;
             if (networkStr && networkStr !== "TESTNET" && networkStr !== testnetPassphrase) {
-                alert("⚠️ Freighter no está en Testnet. Cambiá la red en la configuración de Freighter.");
+                showAlert("⚠️ Freighter no está en Testnet. Cambiá la red en la configuración de Freighter.");
                 throw new Error("Freighter no está en Testnet. Red actual: " + networkStr);
             }
         } catch (e) {
@@ -161,6 +233,48 @@ export default function CompanyDashboard() {
         fetchAssets();
     }, []);
 
+    // Verificar automáticamente escrows que estén en funding_requested
+    useEffect(() => {
+        const checkEscrows = async () => {
+            const pendingEscrows = assets.filter(
+                a => a.status === "funding_requested" && (a.contractId || a.contract_id)
+            );
+
+            if (pendingEscrows.length === 0) return;
+
+            console.log(`🔍 Verificando ${pendingEscrows.length} escrows pendientes...`);
+
+            for (const asset of pendingEscrows) {
+                const contractId = asset.contractId || asset.contract_id;
+                if (!contractId) continue;
+
+                try {
+                    const escrowData = await getEscrowByContractIds({ contractIds: [contractId] });
+                    if (escrowData && escrowData.length > 0) {
+                        const escrow = escrowData[0] as any;
+                        if (escrow?.status === "completed" || escrow?.status === "released") {
+                            console.log(`✅ Escrow ${contractId} ya liberado. Actualizando...`);
+                            await fetch(`/api/assets/${asset.id}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ status: "funded" }),
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.error(`❌ Error verificando escrow ${contractId}:`, e);
+                }
+            }
+
+            // Recargar assets si se actualizó alguno
+            await fetchAssets();
+        };
+
+        if (assets.length > 0) {
+            checkEscrows();
+        }
+    }, [assets.length]); // Solo cuando cambia la cantidad de assets
+
     const fetchAssets = async () => {
         try {
             const response = await fetch('/api/assets');
@@ -217,7 +331,7 @@ export default function CompanyDashboard() {
 
     const handleTokenize = async (id: string) => {
         if (!address) {
-            alert("Primero conectá la wallet de la empresa");
+            showAlert("Primero conectá la wallet de la empresa");
             return;
         }
         setIsProcessing(id);
@@ -234,23 +348,23 @@ export default function CompanyDashboard() {
 
     const handleCreateEscrow = async (asset: Asset) => {
         if (!address) {
-            alert("Primero conectá la wallet de la empresa");
+            showAlert("Primero conectá la wallet de la empresa");
             return;
         }
 
         const borrowerWallet = asset.ownerWallet || asset.owner_wallet;
         if (!borrowerWallet) {
-            alert("El solicitante no tiene wallet asociada");
+            showAlert("El solicitante no tiene wallet asociada");
             return;
         }
 
         if (!usdcIssuer) {
-            alert("Falta configurar NEXT_PUBLIC_USDC_ISSUER en .env.local");
+            showAlert("Falta configurar NEXT_PUBLIC_USDC_ISSUER en .env.local");
             return;
         }
 
         if (!process.env.NEXT_PUBLIC_TW_API_KEY) {
-            alert("Falta configurar NEXT_PUBLIC_TW_API_KEY en .env.local");
+            showAlert("Falta configurar NEXT_PUBLIC_TW_API_KEY en .env.local");
             return;
         }
 
@@ -318,10 +432,10 @@ export default function CompanyDashboard() {
             const err = error as { response?: { status?: number; data?: unknown } };
             if (err?.response) {
                 console.error("Trustless Work: deployEscrow response", err.response.status, err.response.data);
-                alert(`Error creando el escrow. Status ${err.response.status}`);
+                showAlert(`Error creando el escrow. Status ${err.response.status}`);
             } else {
                 console.error("Error:", error);
-                alert("Error creando el escrow. Revisá la consola.");
+                showAlert("Error creando el escrow. Revisá la consola.");
             }
         } finally {
             setIsProcessing(null);
@@ -335,13 +449,20 @@ export default function CompanyDashboard() {
         }
 
         if (!asset.contractId && !asset.contract_id) {
-            alert("Este activo no tiene escrow asociado");
+            showAlert("Este activo no tiene escrow asociado");
             return;
         }
 
-        if (!confirm("¿Confirmás el envío de fondos al solicitante? Esta acción fondea y libera USDC.")) {
-            return;
+        // Verificar si el escrow ya fue liberado antes de continuar
+        const alreadyReleased = await verifyEscrowStatus(asset);
+        if (alreadyReleased) {
+            return; // Ya está liberado, no hacer nada más
         }
+
+        const confirmed = await requestConfirm(
+            "¿Confirmás el envío de fondos al solicitante? Esta acción fondea y libera USDC."
+        );
+        if (!confirmed) return;
 
         setIsProcessing(asset.id);
         try {
@@ -356,12 +477,12 @@ export default function CompanyDashboard() {
             const releaseSignerAddress = escrowInfo?.roles?.releaseSigner;
 
             if (approverAddress && approverAddress !== address) {
-                alert("Esta wallet no es el aprobador del escrow. Usá la wallet del aprobador.");
+                showAlert("Esta wallet no es el aprobador del escrow. Usá la wallet del aprobador.");
                 return;
             }
 
             if (releaseSignerAddress && releaseSignerAddress !== address) {
-                alert("Esta wallet no es el release signer del escrow. Usá la wallet correcta.");
+                showAlert("Esta wallet no es el release signer del escrow. Usá la wallet correcta.");
                 return;
             }
 
@@ -445,16 +566,16 @@ export default function CompanyDashboard() {
             });
             if (response.ok) {
                 await fetchAssets();
-                alert("✅ Fondos enviados correctamente al solicitante");
+                showAlert("✅ Fondos enviados correctamente al solicitante", "Listo");
             }
         } catch (error) {
             const err = error as { response?: { status?: number; data?: unknown } };
             if (err?.response) {
                 console.error("Trustless Work: send funds response", err.response.status, err.response.data);
-                alert(`Error enviando fondos. Status ${err.response.status}`);
+                showAlert(`Error enviando fondos. Status ${err.response.status}`);
             } else {
                 console.error("Error:", error);
-                alert("Error enviando fondos. Revisá la consola.");
+                showAlert("Error enviando fondos. Revisá la consola.");
             }
         } finally {
             setIsProcessing(null);
@@ -986,6 +1107,43 @@ export default function CompanyDashboard() {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {modalState.open && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
+                    <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-950/95 p-6 shadow-2xl">
+                        <div className="mb-3 text-lg font-bold text-white font-[family-name:var(--font-syne)]">
+                            {modalState.title}
+                        </div>
+                        <p className="text-sm text-slate-300 leading-relaxed">
+                            {modalState.message}
+                        </p>
+                        <div className="mt-6 flex justify-end gap-3">
+                            {!modalState.hideCancel && (
+                                <button
+                                    onClick={() => {
+                                        setModalState((prev) => ({ ...prev, open: false }));
+                                        modalResolverRef.current?.(false);
+                                        modalResolverRef.current = null;
+                                    }}
+                                    className="px-4 py-2 rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                                >
+                                    {modalState.cancelLabel}
+                                </button>
+                            )}
+                            <button
+                                onClick={() => {
+                                    setModalState((prev) => ({ ...prev, open: false }));
+                                    modalResolverRef.current?.(true);
+                                    modalResolverRef.current = null;
+                                }}
+                                className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-500 transition-colors"
+                            >
+                                {modalState.confirmLabel}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
