@@ -80,6 +80,19 @@ export default function CompanyDashboard() {
     const freighter = freighterApi.default ? freighterApi.default : freighterApi;
 
     const signAndSendXdr = async (unsignedXdr: string) => {
+        // Verificar que Freighter esté en Testnet
+        try {
+            const networkResult = await freighter.getNetwork();
+            console.log("🌐 Red de Freighter:", networkResult);
+            const networkStr = typeof networkResult === 'string' ? networkResult : networkResult?.network;
+            if (networkStr && networkStr !== "TESTNET" && networkStr !== testnetPassphrase) {
+                alert("⚠️ Freighter no está en Testnet. Cambiá la red en la configuración de Freighter.");
+                throw new Error("Freighter no está en Testnet. Red actual: " + networkStr);
+            }
+        } catch (e) {
+            console.warn("No se pudo verificar la red de Freighter:", e);
+        }
+
         const signed = await freighter.signTransaction(unsignedXdr, {
             networkPassphrase: testnetPassphrase,
         });
@@ -91,7 +104,8 @@ export default function CompanyDashboard() {
                 : signedAny?.signedTxXdr || signedAny?.signedXDR || signedAny?.xdr;
 
         if (!signedXdr) {
-            throw new Error("No se pudo firmar la transaccion");
+            console.error("❌ Respuesta de Freighter:", signed);
+            throw new Error("No se pudo firmar la transacción. ¿Rechazaste la firma o no estás en Testnet?");
         }
 
         const maxAttempts = 4;
