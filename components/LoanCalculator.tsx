@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { Coins, ArrowRight } from "lucide-react";
 
 export default function LoanCalculator() {
@@ -52,9 +53,12 @@ export default function LoanCalculator() {
                     </p>
                 </div>
 
-                <button className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-[0_10px_30px_rgba(37,99,235,0.3)] transition-all flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95">
+                <Link
+                    href="/borrower"
+                    className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-[0_10px_30px_rgba(37,99,235,0.3)] transition-all flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95"
+                >
                     Solicitar este Monto <ArrowRight className="w-5 h-5" />
-                </button>
+                </Link>
             </div>
         </div>
     );

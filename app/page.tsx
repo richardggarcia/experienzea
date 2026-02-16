@@ -4,6 +4,7 @@ import LottieHero from "@/components/LottieHero";
 import LoanCalculator from "@/components/LoanCalculator";
 import { ArrowRight, Tractor, Building2, Car, ShieldCheck, Zap, Coins, Check, Rocket, Globe, Lock } from "lucide-react";
 import { motion } from "framer-motion";
+import AssetLottie from "@/components/AssetLottie";
 
 export default function Home() {
   return (
@@ -202,7 +203,7 @@ export default function Home() {
         <section id="assets" className="py-24 relative overflow-hidden">
           {/* Background decoration */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-blue-600/5 rounded-full blur-[150px] pointer-events-none"></div>
-          
+
           <div className="max-w-7xl mx-auto px-6 relative z-10">
             {/* Header mejorado */}
             <div className="text-center mb-20">
@@ -228,23 +229,23 @@ export default function Home() {
             {/* Cards grid - Funciona en mobile y desktop */}
             <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
               {[
-                { 
-                  title: "Maquinaria Agrícola", 
-                  type: 'tractor', 
+                {
+                  title: "Maquinaria Agrícola",
+                  type: 'tractor',
                   desc: "Tractores, cosechadoras y equipos industriales. Tu herramienta de trabajo como garantía.",
                   icon: Tractor,
                   examples: ["John Deere", "Case IH", "New Holland"]
                 },
-                { 
-                  title: "Real Estate", 
-                  type: 'house', 
+                {
+                  title: "Real Estate",
+                  type: 'house',
                   desc: "Propiedades comerciales, campos, depósitos y terrenos. Inmuebles con valor verificable.",
                   icon: Building2,
                   examples: ["Campos", "Depósitos", "Oficinas"]
                 },
-                { 
-                  title: "Vehículos Premium", 
-                  type: 'car', 
+                {
+                  title: "Vehículos Premium",
+                  type: 'car',
                   desc: "Autos de alta gama, camiones y flotas logísticas. Activos depreciables con valor residual.",
                   icon: Car,
                   examples: ["Camionetas", "Flotas", "Maquinaria pesada"]
@@ -263,14 +264,17 @@ export default function Home() {
                   <div className="relative h-full bg-slate-900/80 backdrop-blur-sm border border-white/[0.08] hover:border-blue-500/30 rounded-3xl p-8 transition-all duration-300 overflow-hidden">
                     {/* Gradient background on hover */}
                     <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-indigo-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    
-                    {/* Icon container */}
-                    <div className="relative mb-8">
-                      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500/20 to-indigo-500/20 border border-blue-500/20 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                        <item.icon className="w-10 h-10 text-blue-400" />
+
+                    {/* Lottie/Icon container - EXPANDED & PRO */}
+                    <div className="relative mb-8 h-64 w-full flex items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b from-blue-500/10 to-transparent group-hover:from-blue-500/20 transition-all duration-500">
+
+                      {/* Ambient Glow */}
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-blue-500/20 blur-[60px] rounded-full opacity-50 group-hover:opacity-80 transition-opacity duration-500"></div>
+
+                      {/* Render Lottie - Big & Centered */}
+                      <div className="w-full h-full p-4 flex items-center justify-center transform group-hover:scale-105 transition-transform duration-500">
+                        <AssetLottie type={item.type} />
                       </div>
-                      {/* Decorative element */}
-                      <div className="absolute -top-2 -right-2 w-8 h-8 bg-blue-500/10 rounded-full blur-xl"></div>
                     </div>
 
                     {/* Content */}
@@ -321,6 +325,8 @@ export default function Home() {
             </motion.div>
           </div>
         </section>
+
+
 
         {/* COMPARISON SECTION */}
         <section className="py-16 md:py-20 bg-slate-900/30 border-y border-white/[0.05]">

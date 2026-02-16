@@ -8,11 +8,20 @@ export default function AssetLottie({ type }: { type: string }) {
     const [animationData, setAnimationData] = useState(null);
 
     useEffect(() => {
-        // Logic to load different JSONs based on type
-        let fileName = 'hero.json';
-        if (type === 'house' || type === 'silo') fileName = 'house.json';
-        if (type === 'car') fileName = 'car.json';
-        if (type === 'tractor') fileName = 'hero.json';
+        // Updated mapping
+        let fileName = 'hero.json'; // Default (Target)
+
+        // Factory/Warehouse asset for most types
+        if (['house', 'silo', 'invoice', 'art'].includes(type)) {
+            fileName = 'factory.json';
+        }
+
+        if (type === 'farm') fileName = 'farm.json';
+
+        if (type === 'invoice') fileName = 'factory.json'; // Keep factory for invoices
+
+        if (type === 'car') fileName = 'car.json'; // Car asset now available
+        if (type === 'tractor') fileName = 'tractor.json'; // Specific tractor asset
 
         fetch(`/lotties/${fileName}`)
             .then(res => {
