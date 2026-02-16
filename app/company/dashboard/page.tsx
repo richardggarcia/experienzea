@@ -84,10 +84,11 @@ export default function CompanyDashboard() {
             networkPassphrase: testnetPassphrase,
         });
 
+        const signedAny = signed as { signedTxXdr?: string; signedXDR?: string; xdr?: string };
         const signedXdr =
             typeof signed === "string"
                 ? signed
-                : signed?.signedTxXdr;
+                : signedAny?.signedTxXdr || signedAny?.signedXDR || signedAny?.xdr;
 
         if (!signedXdr) {
             throw new Error("No se pudo firmar la transaccion");
@@ -100,6 +101,9 @@ export default function CompanyDashboard() {
             } catch (error) {
                 const err = error as { response?: { data?: { message?: string } } };
                 const message = err?.response?.data?.message || "";
+                if (err?.response) {
+                    console.error("Trustless Work: sendTransaction response", err.response.data);
+                }
                 const shouldRetry = message.includes("resultMetaXdr");
 
                 if (!shouldRetry || attempt === maxAttempts) {
