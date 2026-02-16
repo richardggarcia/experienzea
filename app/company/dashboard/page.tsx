@@ -93,7 +93,24 @@ export default function CompanyDashboard() {
             throw new Error("No se pudo firmar la transaccion");
         }
 
-        return sendTransaction(signedXdr);
+        const maxAttempts = 4;
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+            try {
+                return await sendTransaction(signedXdr);
+            } catch (error) {
+                const err = error as { response?: { data?: { message?: string } } };
+                const message = err?.response?.data?.message || "";
+                const shouldRetry = message.includes("resultMetaXdr");
+
+                if (!shouldRetry || attempt === maxAttempts) {
+                    throw error;
+                }
+
+                await new Promise((resolve) => setTimeout(resolve, 1200));
+            }
+        }
+
+        throw new Error("No se pudo enviar la transaccion");
     };
 
     const waitForEscrowContractId = async (signer: string, engagementId: string) => {
