@@ -510,51 +510,93 @@ export default function CompanyDashboard() {
                 throw new Error("No se pudo enviar la transaccion de fondeo");
             }
 
-            const approveResponse = await approveMilestone(
-                {
-                    contractId,
-                    milestoneIndex: "0",
-                    approver: approverAddress || address,
-                },
-                "single-release"
-            );
+            // PASO 2: Aprobar milestone (con manejo de "already approved")
+            let approveSuccess = false;
+            try {
+                const approveResponse = await approveMilestone(
+                    {
+                        contractId,
+                        milestoneIndex: "0",
+                        approver: approverAddress || address,
+                    },
+                    "single-release"
+                );
 
-            if (approveResponse?.status === "FAILED") {
-                console.error("Trustless Work: approveMilestone FAILED", approveResponse);
-                throw new Error("Respuesta FAILED al aprobar milestone");
+                if (approveResponse?.status === "FAILED") {
+                    const errorMsg = JSON.stringify(approveResponse);
+                    if (errorMsg.includes("already been approved")) {
+                        console.log("⚠️ Milestone ya estaba aprobado, continuando...");
+                        approveSuccess = true;
+                    } else {
+                        console.error("Trustless Work: approveMilestone FAILED", approveResponse);
+                        throw new Error("Respuesta FAILED al aprobar milestone");
+                    }
+                } else if (!approveResponse?.unsignedTransaction) {
+                    console.log("⚠️ No hay transacción de approve, asumiendo que ya está aprobado...");
+                    approveSuccess = true;
+                } else {
+                    const approveSend = await signAndSendXdr(approveResponse.unsignedTransaction);
+                    if (!approveSend || approveSend.status !== "SUCCESS") {
+                        console.error("Trustless Work: sendTransaction (approve) FAILED", approveSend);
+                        throw new Error("No se pudo enviar la transaccion de aprobacion");
+                    }
+                    approveSuccess = true;
+                }
+            } catch (error: any) {
+                if (error.message?.includes("already been approved")) {
+                    console.log("⚠️ Milestone ya estaba aprobado (catch), continuando...");
+                    approveSuccess = true;
+                } else {
+                    throw error;
+                }
             }
 
-            if (!approveResponse?.unsignedTransaction) {
-                throw new Error("No se recibio la transaccion de aprobacion");
+            if (!approveSuccess) {
+                throw new Error("No se pudo aprobar el milestone");
             }
 
-            const approveSend = await signAndSendXdr(approveResponse.unsignedTransaction);
-            if (!approveSend || approveSend.status !== "SUCCESS") {
-                console.error("Trustless Work: sendTransaction (approve) FAILED", approveSend);
-                throw new Error("No se pudo enviar la transaccion de aprobacion");
+            // PASO 3: Liberar fondos (con manejo de "already released")
+            let releaseSuccess = false;
+            try {
+                const releaseResponse = await releaseFunds(
+                    {
+                        contractId,
+                        releaseSigner: address,
+                    },
+                    "single-release"
+                );
+
+                if (releaseResponse?.status === "FAILED") {
+                    const errorMsg = JSON.stringify(releaseResponse);
+                    if (errorMsg.includes("already released") || errorMsg.includes("completed")) {
+                        console.log("⚠️ Fondos ya liberados, continuando...");
+                        releaseSuccess = true;
+                    } else {
+                        console.error("Trustless Work: releaseFunds FAILED", releaseResponse);
+                        throw new Error("Respuesta FAILED al liberar fondos");
+                    }
+                } else if (!releaseResponse?.unsignedTransaction) {
+                    console.log("⚠️ No hay transacción de release, asumiendo que ya está liberado...");
+                    releaseSuccess = true;
+                } else {
+                    const releaseSend = await signAndSendXdr(releaseResponse.unsignedTransaction);
+                    if (!releaseSend || releaseSend.status !== "SUCCESS") {
+                        console.error("Trustless Work: sendTransaction (release) FAILED", releaseSend);
+                        throw new Error("No se pudo enviar la transaccion de liberacion");
+                    }
+                    releaseSuccess = true;
+                }
+            } catch (error: any) {
+                if (error.message?.includes("already released") || error.message?.includes("completed")) {
+                    console.log("⚠️ Fondos ya liberados (catch), continuando...");
+                    releaseSuccess = true;
+                } else {
+                    throw error;
+                }
             }
 
-            const releaseResponse = await releaseFunds(
-                {
-                    contractId,
-                    releaseSigner: address,
-                },
-                "single-release"
-            );
-
-            if (releaseResponse?.status === "FAILED") {
-                console.error("Trustless Work: releaseFunds FAILED", releaseResponse);
-                throw new Error("Respuesta FAILED al liberar fondos");
-            }
-
-            if (!releaseResponse?.unsignedTransaction) {
-                throw new Error("No se recibio la transaccion de liberacion");
-            }
-
-            const releaseSend = await signAndSendXdr(releaseResponse.unsignedTransaction);
-            if (!releaseSend || releaseSend.status !== "SUCCESS") {
-                console.error("Trustless Work: sendTransaction (release) FAILED", releaseSend);
-                throw new Error("No se pudo enviar la transaccion de liberacion");
+            if (!releaseSuccess) {
+                throw new Error("No se pudieron liberar los fondos");
             }
 
             const response = await fetch(`/api/assets/${asset.id}`, {
