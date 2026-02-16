@@ -274,8 +274,14 @@ export default function CompanyDashboard() {
                 await fetchAssets();
             }
         } catch (error) {
-            console.error("Error:", error);
-            alert("Error creando el escrow. Revisá la consola.");
+            const err = error as { response?: { status?: number; data?: unknown } };
+            if (err?.response) {
+                console.error("Trustless Work: deployEscrow response", err.response.status, err.response.data);
+                alert(`Error creando el escrow. Status ${err.response.status}`);
+            } else {
+                console.error("Error:", error);
+                alert("Error creando el escrow. Revisá la consola.");
+            }
         } finally {
             setIsProcessing(null);
         }
@@ -383,8 +389,14 @@ export default function CompanyDashboard() {
                 alert("✅ Fondos enviados correctamente al solicitante");
             }
         } catch (error) {
-            console.error("Error:", error);
-            alert("Error enviando fondos. Revisá la consola.");
+            const err = error as { response?: { status?: number; data?: unknown } };
+            if (err?.response) {
+                console.error("Trustless Work: send funds response", err.response.status, err.response.data);
+                alert(`Error enviando fondos. Status ${err.response.status}`);
+            } else {
+                console.error("Error:", error);
+                alert("Error enviando fondos. Revisá la consola.");
+            }
         } finally {
             setIsProcessing(null);
         }
