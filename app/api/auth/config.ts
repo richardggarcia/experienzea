@@ -11,7 +11,7 @@ export const authOptions: NextAuthOptions = {
                 password: { label: "Password", type: "password" }
             },
             async authorize(credentials) {
-                const adminEmail = process.env.ADMIN_EMAIL || "admin@experienzea.com";
+                const adminEmail = process.env.ADMIN_EMAIL;
                 const adminPassword = process.env.ADMIN_PASSWORD;
                 
                 if (!adminPassword) {

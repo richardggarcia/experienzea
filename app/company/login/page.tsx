@@ -7,7 +7,7 @@ import { Loader2, Building2, Lock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 export default function CompanyLogin() {
-    const [email, setEmail] = useState("admin@experienzea.com");
+    const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -79,7 +79,7 @@ export default function CompanyLogin() {
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl focus:border-blue-500 outline-none text-white transition-colors placeholder:text-slate-600"
-                                placeholder="admin@experienzea.com"
+                                placeholder="ejemplo@correo.com"
                                 required
                             />
                         </div>

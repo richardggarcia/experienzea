@@ -11,7 +11,7 @@ const handler = NextAuth({
             },
             async authorize(credentials) {
                 // Admin configurable via env vars
-                const adminEmail = process.env.ADMIN_EMAIL || "admin@experienzea.com";
+                const adminEmail = process.env.ADMIN_EMAIL;
                 const adminPassword = process.env.ADMIN_PASSWORD;
                 
                 if (!adminPassword) {
