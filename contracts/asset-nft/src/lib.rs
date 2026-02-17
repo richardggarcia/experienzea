@@ -22,10 +22,10 @@ pub struct AssetNFT {
 /// Enum para las claves de almacenamiento
 #[contracttype]
 pub enum DataKey {
-    Token(u64),           // token_id -> AssetNFT
-    OwnerTokenCount(Address),  // address -> cantidad de NFTs
-    TokenCount,          // total de NFTs minteados
-    Admin,               // address del admin
+    Token(u64),              // token_id -> AssetNFT
+    OwnerTokenCount(Address), // address -> cantidad de NFTs
+    TokenCount,              // total de NFTs minteados
+    Admin,                   // address del admin
 }
 
 /// El contrato NFT
@@ -89,10 +89,10 @@ impl AssetNFTContract {
         // Actualizar contador total
         env.storage().instance().set(&DataKey::TokenCount, &token_id);
 
-        // Emitir evento (para que el frontend lo detecte)
+        // Emitir evento
         env.events().publish(
             (Symbol::new(&env, "mint"), token_id),
-            (to, asset_id),
+            (to,),
         );
 
         token_id

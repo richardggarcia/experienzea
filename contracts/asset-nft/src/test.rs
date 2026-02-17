@@ -27,7 +27,7 @@ fn test_mint() {
         &borrower,
         &asset_id,
         &asset_type,
-        &50000u64,  // $50,000
+        &50000u64,
         &metadata,
     );
 
@@ -75,4 +75,53 @@ fn test_get_nft() {
     assert_eq!(nft.owner, borrower);
     assert_eq!(nft.value, 25000u64);
     assert_eq!(nft.asset_type, String::from_str(&env, "car"));
+}
+
+#[test]
+fn test_multiple_mints() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, AssetNFTContract);
+    let client = AssetNFTContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let borrower1 = Address::generate(&env);
+    let borrower2 = Address::generate(&env);
+
+    env.mock_all_auths();
+    client.initialize(&admin);
+
+    // Mint para borrower 1
+    env.mock_all_auths();
+    client.mint(
+        &borrower1,
+        &String::from_str(&env, "asset-1"),
+        &String::from_str(&env, "tractor"),
+        &50000u64,
+        &String::from_str(&env, "ipfs://1"),
+    );
+
+    // Mint para borrower 2
+    env.mock_all_auths();
+    client.mint(
+        &borrower2,
+        &String::from_str(&env, "asset-2"),
+        &String::from_str(&env, "car"),
+        &30000u64,
+        &String::from_str(&env, "ipfs://2"),
+    );
+
+    // Mint otro para borrower 1
+    env.mock_all_auths();
+    client.mint(
+        &borrower1,
+        &String::from_str(&env, "asset-3"),
+        &String::from_str(&env, "house"),
+        &100000u64,
+        &String::from_str(&env, "ipfs://3"),
+    );
+
+    // Verificar balances
+    assert_eq!(client.balance_of(&borrower1), 2);
+    assert_eq!(client.balance_of(&borrower2), 1);
+    assert_eq!(client.total_supply(), 3);
 }
