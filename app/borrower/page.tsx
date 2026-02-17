@@ -479,7 +479,13 @@ export default function Dashboard() {
                 <div className="grid md:grid-cols-3 gap-6 mb-12">
                     <div className="bg-slate-900/50 p-6 rounded-[2rem] shadow-lg border border-white/[0.05] backdrop-blur-sm group hover:border-blue-500/20 transition-all">
                         <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-2 font-[family-name:var(--font-syne)]">Liquidez Disponible</p>
-                        <p className="text-4xl font-bold text-white mb-1 font-[family-name:var(--font-syne)]">$0.00 <span className="text-lg text-slate-500 font-normal font-[family-name:var(--font-manrope)]">USDC</span></p>
+                        <p className="text-4xl font-bold text-white mb-1 font-[family-name:var(--font-syne)]">
+                            {walletBalance !== null 
+                                ? `$${walletBalance.toLocaleString()}` 
+                                : '---'
+                            } 
+                            <span className="text-lg text-slate-500 font-normal font-[family-name:var(--font-manrope)]">USDC</span>
+                        </p>
                     </div>
                     <div className="bg-slate-900/50 p-6 rounded-[2rem] shadow-lg border border-white/[0.05] backdrop-blur-sm group hover:border-blue-500/20 transition-all">
                         <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-2 font-[family-name:var(--font-syne)]">Valor Tokenizado</p>
