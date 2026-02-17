@@ -971,7 +971,12 @@ export default function CompanyDashboard() {
 
     const pendingCount = assets.filter((a) => a.status === "pending_review").length;
     const approvedCount = assets.filter((a) => a.status === "approved").length;
-    const tokenizedCount = assets.filter((a) => a.status === "tokenized").length;
+    const tokenizedCount = assets.filter(
+        (a) =>
+            a.status === "tokenized" ||
+            a.status === "funding_requested" ||
+            a.status === "funded"
+    ).length;
     const fundedCount = assets.filter((a) => a.status === "funding_requested" || a.status === "funded").length;
 
     // Componente de acciones reutilizable para tabla y cards
@@ -1187,12 +1192,19 @@ export default function CompanyDashboard() {
                 {/* Assets Section */}
                 <div className="bg-slate-900/50 rounded-[2rem] border border-white/[0.05] overflow-hidden">
                     <div className="p-6 border-b border-white/[0.05]">
-                        <h2 className="text-xl font-bold font-[family-name:var(--font-syne)] text-white">
-                            Activos Registrados
-                        </h2>
-                        <p className="text-slate-500 text-sm mt-1 font-[family-name:var(--font-manrope)]">
-                            Gestión de garantías y tokenización
-                        </p>
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                            <div>
+                                <h2 className="text-xl font-bold font-[family-name:var(--font-syne)] text-white">
+                                    Activos Registrados
+                                </h2>
+                                <p className="text-slate-500 text-sm mt-1 font-[family-name:var(--font-manrope)]">
+                                    Gestión de garantías y tokenización
+                                </p>
+                            </div>
+                            <div className="inline-flex items-center gap-2 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 px-3 py-1 text-xs font-semibold">
+                                <Coins className="w-4 h-4" /> NFTs emitidos: {tokenizedCount}
+                            </div>
+                        </div>
                     </div>
 
                     {loading ? (
