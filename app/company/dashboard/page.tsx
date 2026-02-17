@@ -15,6 +15,7 @@ import {
     useApproveMilestone,
 } from "@trustless-work/escrow";
 import * as freighterApi from "@stellar/freighter-api";
+import * as StellarSdk from "@stellar/stellar-sdk";
 import {
     LogOut,
     Loader2,
@@ -136,6 +137,9 @@ export default function CompanyDashboard() {
 
     const usdcIssuer = process.env.NEXT_PUBLIC_USDC_ISSUER || "";
     const usdcSymbol = process.env.NEXT_PUBLIC_USDC_SYMBOL || "USDC";
+    const nftContractId = process.env.NEXT_PUBLIC_NFT_CONTRACT_ID || "";
+    const sorobanRpcUrl =
+        process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || "https://soroban-testnet.stellar.org";
     const testnetPassphrase = "Test SDF Network ; September 2015";
 
     const freighter = freighterApi.default ? freighterApi.default : freighterApi;
@@ -448,16 +452,143 @@ export default function CompanyDashboard() {
             showAlert("Primero conectá la wallet de la empresa");
             return;
         }
+
+        if (!nftContractId) {
+            showAlert("Falta configurar NEXT_PUBLIC_NFT_CONTRACT_ID");
+            return;
+        }
+
+        const asset = assets.find((item) => item.id === id);
+        if (!asset) {
+            showAlert("No se encontró el activo");
+            return;
+        }
+
+        const borrowerWallet = asset.ownerWallet || asset.owner_wallet;
+        if (!borrowerWallet) {
+            showAlert("El solicitante no tiene wallet asociada");
+            return;
+        }
+
         setIsProcessing(id);
-        // Simular mint del NFT
-        setTimeout(() => {
-            setAssets(
-                assets.map((a) =>
-                    a.id === id ? { ...a, status: "tokenized" } : a
+        try {
+            const server = new StellarSdk.rpc.Server(sorobanRpcUrl, {
+                allowHttp: sorobanRpcUrl.startsWith("http://"),
+            });
+
+            const account = await server.getAccount(address);
+            const contract = new StellarSdk.Contract(nftContractId);
+            // Construir URL completa para el metadata
+            const documentPath = asset.documents?.property || asset.documents?.insurance || "";
+            const assetUri = documentPath 
+                ? `${window.location.origin}${documentPath}`
+                : `${window.location.origin}/api/assets/${asset.id}`;
+
+            // Usar xdr directamente para tipos específicos
+            const { xdr } = StellarSdk;
+            
+            const tx = new StellarSdk.TransactionBuilder(account, {
+                fee: StellarSdk.BASE_FEE,
+                networkPassphrase: testnetPassphrase,
+            })
+                .addOperation(
+                    contract.call(
+                        "mint",
+                        new StellarSdk.Address(borrowerWallet).toScVal(),
+                        xdr.ScVal.scvString(asset.id),
+                        xdr.ScVal.scvString(asset.type),
+                        xdr.ScVal.scvU64(xdr.Uint64.fromString(String(asset.value))),
+                        xdr.ScVal.scvString(assetUri)
+                    )
                 )
-            );
+                .setTimeout(30)
+                .build();
+
+            const prepared = await server.prepareTransaction(tx);
+            const signed = await freighter.signTransaction(prepared.toXDR(), {
+                networkPassphrase: testnetPassphrase,
+            });
+
+            const signedAny = signed as { signedTxXdr?: string; signedXDR?: string; xdr?: string };
+            const signedXdr =
+                typeof signed === "string"
+                    ? signed
+                    : signedAny?.signedTxXdr || signedAny?.signedXDR || signedAny?.xdr;
+
+            if (!signedXdr) {
+                throw new Error("No se pudo firmar la transacción");
+            }
+
+            const rpcRequest = async (method: string, params: Record<string, unknown>) => {
+                const response = await fetch(sorobanRpcUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        jsonrpc: "2.0",
+                        id: 1,
+                        method,
+                        params,
+                    }),
+                });
+
+                const json = await response.json();
+                if (json.error) {
+                    throw new Error(json.error.message || "RPC error");
+                }
+                return json.result;
+            };
+
+            const sendResponse = await rpcRequest("sendTransaction", {
+                transaction: signedXdr,
+            });
+
+            if (sendResponse?.status === "FAILED") {
+                throw new Error("La transacción falló");
+            }
+
+            if (sendResponse?.hash) {
+                console.log(
+                    "✅ Mint TX:",
+                    `https://stellar.expert/explorer/testnet/tx/${sendResponse.hash}`
+                );
+            }
+
+            if (sendResponse?.status === "PENDING") {
+                for (let attempt = 0; attempt < 8; attempt += 1) {
+                    const txResponse = await rpcRequest("getTransaction", {
+                        hash: sendResponse.hash,
+                    });
+                    if (txResponse?.status === "SUCCESS") break;
+                    if (txResponse?.status === "FAILED") {
+                        throw new Error("La transacción falló");
+                    }
+                    await new Promise((resolve) => setTimeout(resolve, 1200));
+                }
+            }
+
+            const patchResponse = await fetch(`/api/assets/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: "tokenized" }),
+            });
+
+            if (patchResponse.ok) {
+                setAssets(
+                    assets.map((item) =>
+                        item.id === id ? { ...item, status: "tokenized" } : item
+                    )
+                );
+            }
+
+            showAlert("✅ NFT tokenizado en el contrato", "Listo");
+        } catch (error) {
+            console.error("Error tokenizando:", error);
+            showAlert("Error tokenizando el NFT. Revisá la consola.");
+        } finally {
             setIsProcessing(null);
-        }, 2000);
+        }
     };
 
     const handleCreateEscrow = async (asset: Asset) => {

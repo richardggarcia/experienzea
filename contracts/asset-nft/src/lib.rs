@@ -29,6 +29,7 @@ pub enum DataKey {
 }
 
 /// El contrato NFT
+#[contract]
 pub struct AssetNFTContract;
 
 #[contractimpl]
@@ -58,8 +59,7 @@ impl AssetNFTContract {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
         
-        // Requerir auth del recipiente (para asegurar que la wallet existe)
-        to.require_auth();
+        // NOTA: El borrower no necesita firmar, solo recibe el NFT
 
         // Obtener el siguiente token_id
         let token_count: u64 = env.storage().instance().get(&DataKey::TokenCount).unwrap_or(0);
@@ -133,6 +133,3 @@ impl AssetNFTContract {
         env.storage().instance().get(&DataKey::Admin).unwrap()
     }
 }
-
-// Exportar el contrato
-pub use AssetNFTContract;
