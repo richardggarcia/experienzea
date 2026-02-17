@@ -3,8 +3,11 @@
 ![ExperienZea](https://img.shields.io/badge/ExperienZea-RWA%20Lending-orange)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 ![React](https://img.shields.io/badge/React-19-blue)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
+![Impacta](https://img.shields.io/badge/Impacta-Bootcamp-purple)
+![Stellar](https://img.shields.io/badge/Stellar-Blockchain-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
+
+**Proyecto desarrollado para el Impacta Bootcamp - Stellar Blockchain**
 
 **Tu Activo Real = Liquidez Inmediata**
 
@@ -247,3 +250,18 @@ MIT License - ver [LICENSE](LICENSE) para detalles.
 ---
 
 **ExperienZea** - Democratizando el acceso a liquidez con activos reales.
+
+---
+
+## 🎓 Impacta Bootcamp
+
+Este proyecto fue desarrollado como parte del **Impacta Bootcamp** de Stellar blockchain.
+
+**Mentor:** [Caleb Pactrick](https://github.com/zkCaleb-dev)  
+**Repositorio de ejemplos:** [ImpactaBootcamp-ExampleRepos](https://github.com/zkCaleb-dev/ImpactaBootcamp-ExampleRepos)
+
+Tecnologías aplicadas:
+- ✅ Stellar Blockchain (Testnet)
+- ✅ Soroban Smart Contracts
+- ✅ Trustless Work Escrow
+- ✅ Freighter Wallet Integration

@@ -418,7 +418,10 @@ export default function CompanyDashboard() {
     };
 
     const handleReject = async (id: string) => {
-        if (!confirm("¿Estás seguro de rechazar este activo? Se eliminará permanentemente.")) return;
+        const confirmed = await requestConfirm(
+            "¿Estás seguro de rechazar este activo? Se eliminará permanentemente."
+        );
+        if (!confirmed) return;
         
         setIsProcessing(id);
         try {
@@ -555,7 +558,7 @@ export default function CompanyDashboard() {
 
     const handleSendFunds = async (asset: Asset, attempt = 1) => {
         if (!address) {
-            alert("Primero conectá la wallet de la empresa");
+            showAlert("Primero conectá la wallet de la empresa");
             return;
         }
 
