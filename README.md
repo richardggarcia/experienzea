@@ -102,6 +102,10 @@ Crear archivo `.env.local`:
 NEXTAUTH_SECRET=tu_secreto_aqui
 NEXTAUTH_URL=http://localhost:3000
 
+# Admin Credentials
+ADMIN_EMAIL=admin@experienzea.com
+ADMIN_PASSWORD=tu_password_seguro_aqui
+
 # Supabase
 SUPABASE_URL=https://tu-proyecto.supabase.co
 SUPABASE_ANON_KEY=tu_anon_key
@@ -112,6 +116,12 @@ CLOUDFLARE_ACCOUNT_ID=tu_account_id
 CLOUDFLARE_ACCESS_KEY_ID=tu_access_key
 CLOUDFLARE_SECRET_ACCESS_KEY=tu_secret_key
 R2_BUCKET_NAME=experienzea-docs
+
+# Trustless Work (opcional para testing)
+NEXT_PUBLIC_TW_BASE_URL=https://dev.api.trustlesswork.com
+NEXT_PUBLIC_TW_API_KEY=tu_api_key
+NEXT_PUBLIC_USDC_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA
+NEXT_PUBLIC_USDC_SYMBOL=USDC
 ```
 
 4. **Configurar base de datos en Supabase**
@@ -147,8 +157,9 @@ npm run dev
 ## 👥 Credenciales de Demo
 
 ### Admin
-- **Email**: `admin@experienzea.com`
-- **Password**: `17515429`
+- Configura en `.env.local`:
+  - `ADMIN_EMAIL` (default: admin@experienzea.com)
+  - `ADMIN_PASSWORD` (tu password seguro)
 
 ### Solicitante
 - Conectar con cualquier wallet Freighter (Stellar Testnet)

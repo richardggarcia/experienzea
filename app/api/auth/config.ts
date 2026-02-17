@@ -11,14 +11,22 @@ export const authOptions: NextAuthOptions = {
                 password: { label: "Password", type: "password" }
             },
             async authorize(credentials) {
+                const adminEmail = process.env.ADMIN_EMAIL || "admin@experienzea.com";
+                const adminPassword = process.env.ADMIN_PASSWORD;
+                
+                if (!adminPassword) {
+                    console.error("❌ ADMIN_PASSWORD no está configurada");
+                    return null;
+                }
+                
                 if (
-                    credentials?.email === "admin@experienzea.com" &&
-                    credentials?.password === "17515429"
+                    credentials?.email === adminEmail &&
+                    credentials?.password === adminPassword
                 ) {
                     return {
                         id: "1",
                         name: "ExperienZea Admin",
-                        email: "admin@experienzea.com",
+                        email: adminEmail,
                         role: "admin"
                     };
                 }
