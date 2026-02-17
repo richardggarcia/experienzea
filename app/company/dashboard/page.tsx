@@ -1171,7 +1171,7 @@ export default function CompanyDashboard() {
                             {tokenizedCount}
                         </p>
                         <p className="text-slate-500 text-[10px] md:text-xs uppercase tracking-wider mt-1">
-                            Tokenizados
+                            NFTs emitidos
                         </p>
                     </div>
                     <div className="bg-slate-900/50 p-4 md:p-5 rounded-2xl border border-white/[0.05] group hover:border-blue-500/20 transition-all">
@@ -1239,6 +1239,13 @@ export default function CompanyDashboard() {
                                                                 <p className="font-bold text-white text-sm">
                                                                     {asset.name}
                                                                 </p>
+                                                                {(asset.status === "tokenized" ||
+                                                                    asset.status === "funding_requested" ||
+                                                                    asset.status === "funded") && (
+                                                                    <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 text-[10px] font-semibold">
+                                                                        <Coins className="w-3 h-3" /> NFT emitido
+                                                                    </div>
+                                                                )}
                                                                 <p className="text-[10px] text-slate-500 font-mono">
                                                                     ID: {asset.id.slice(0, 8)}...
                                                                 </p>
@@ -1280,15 +1287,22 @@ export default function CompanyDashboard() {
                                             className="bg-slate-900 border border-white/[0.05] rounded-2xl p-5 shadow-lg relative overflow-hidden"
                                         >
                                             <div className="flex justify-between items-start mb-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-blue-400">
-                                                        {getIcon(asset.type)}
-                                                    </div>
-                                                    <div>
-                                                        <h3 className="font-bold text-white">{asset.name}</h3>
-                                                        <p className="text-xs text-slate-500">{asset.owner}</p>
-                                                    </div>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-blue-400">
+                                                    {getIcon(asset.type)}
                                                 </div>
+                                                <div>
+                                                    <h3 className="font-bold text-white">{asset.name}</h3>
+                                                    {(asset.status === "tokenized" ||
+                                                        asset.status === "funding_requested" ||
+                                                        asset.status === "funded") && (
+                                                        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 text-[10px] font-semibold">
+                                                            <Coins className="w-3 h-3" /> NFT emitido
+                                                        </div>
+                                                    )}
+                                                    <p className="text-xs text-slate-500">{asset.owner}</p>
+                                                </div>
+                                            </div>
                                                 <div className="text-right">
                                                     <p className="text-lg font-bold text-white font-[family-name:var(--font-syne)]">
                                                         ${asset.value.toLocaleString()}
