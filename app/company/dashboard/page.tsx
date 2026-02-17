@@ -418,8 +418,26 @@ export default function CompanyDashboard() {
     };
 
     const handleReject = async (id: string) => {
-        if (!confirm("¿Estás seguro de rechazar este activo?")) return;
-        setAssets(assets.filter((a) => a.id !== id));
+        if (!confirm("¿Estás seguro de rechazar este activo? Se eliminará permanentemente.")) return;
+        
+        setIsProcessing(id);
+        try {
+            const response = await fetch(`/api/assets/${id}`, {
+                method: 'DELETE',
+            });
+            
+            if (response.ok) {
+                setAssets(assets.filter((a) => a.id !== id));
+                showAlert("✅ Activo rechazado y eliminado", "Listo");
+            } else {
+                showAlert("❌ Error al eliminar el activo", "Error");
+            }
+        } catch (error) {
+            console.error("Error:", error);
+            showAlert("❌ Error al eliminar el activo", "Error");
+        } finally {
+            setIsProcessing(null);
+        }
     };
 
     const handleTokenize = async (id: string) => {
