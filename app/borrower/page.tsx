@@ -336,7 +336,7 @@ export default function Dashboard() {
         }
     }
 
-    const handleMarkCompleted = async (asset: Asset, attempt = 1) => {
+    const handleFirmarAcuerdo = async (asset: Asset, attempt = 1) => {
         if (!address) return;
         if (!asset.contractId && !asset.contract_id) {
             showAlert("Este activo no tiene escrow asociado");
@@ -360,9 +360,9 @@ export default function Dashboard() {
             // 🎯 Verificar si el milestone ya está completado
             const milestone = escrowInfo?.milestones?.[0] as any;
             if (milestone?.status === "completed" || milestone?.approved) {
-                console.log("✅ Milestone ya estaba completado");
+                console.log("✅ Acuerdo ya estaba firmado");
                 setCompletedMilestones((prev) => new Set(prev).add(asset.id));
-                showAlert("✅ Milestone ya estaba completado", "Listo");
+                showAlert("✅ Acuerdo ya firmado", "Listo");
                 return;
             }
 
@@ -383,7 +383,7 @@ export default function Dashboard() {
                 if (errorMsg.includes("already") || errorMsg.includes("completed")) {
                     console.log("⚠️ Milestone ya completado (API), marcando como éxito...");
                     setCompletedMilestones((prev) => new Set(prev).add(asset.id));
-                    showAlert("✅ Milestone ya estaba completado", "Listo");
+                    showAlert("✅ Acuerdo ya firmado", "Listo");
                     return;
                 }
                 throw new Error("Error en changeMilestoneStatus: " + errorMsg);
@@ -399,7 +399,7 @@ export default function Dashboard() {
             }
 
             setCompletedMilestones((prev) => new Set(prev).add(asset.id));
-            showAlert("✅ Milestone marcado como completado", "Listo");
+            showAlert("✅ Acuerdo firmado correctamente", "Listo");
         } catch (error: any) {
             const MAX_RETRIES = 2;
             const errorMsg = error?.message || "";
@@ -408,14 +408,14 @@ export default function Dashboard() {
             if (errorMsg.includes("already") || errorMsg.includes("completed")) {
                 console.log("⚠️ Milestone ya completado (catch)");
                 setCompletedMilestones((prev) => new Set(prev).add(asset.id));
-                showAlert("✅ Milestone ya estaba completado", "Listo");
+                showAlert("✅ Acuerdo ya firmado", "Listo");
             } 
             // 🔄 Auto-retry para otros errores
             else if (attempt < MAX_RETRIES) {
-                console.log(`🔄 Reintentando handleMarkCompleted (${attempt + 1}/${MAX_RETRIES})...`);
+                console.log(`🔄 Reintentando firma (${attempt + 1}/${MAX_RETRIES})...`);
                 setIsProcess(null);
                 await new Promise(resolve => setTimeout(resolve, 1500));
-                return handleMarkCompleted(asset, attempt + 1);
+                return handleFirmarAcuerdo(asset, attempt + 1);
             } else {
                 console.error("Error:", error);
                 showAlert("Error marcando el milestone después de varios intentos. Revisá la consola.");
@@ -541,33 +541,37 @@ export default function Dashboard() {
                                 {asset.status === 'funding_requested' && (
                                     <div className="w-full space-y-3">
                                         <div className="w-full bg-blue-500/10 border border-blue-500/20 text-blue-500 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2">
-                                            <Rocket className="w-4 h-4" /> 
+                                            <FileText className="w-4 h-4" /> 
                                             {completedMilestones.has(asset.id) 
-                                                ? "Milestone completado - Esperando admin" 
-                                                : "Esperando liberación de fondos"}
+                                                ? "Acuerdo firmado - Procesando" 
+                                                : "Pendiente de firma del acuerdo"}
                                         </div>
                                         <button
-                                            onClick={() => handleMarkCompleted(asset)}
+                                            onClick={() => handleFirmarAcuerdo(asset)}
                                             disabled={isProcess === asset.id || completedMilestones.has(asset.id)}
-                                            className="w-full bg-emerald-600/10 border border-emerald-500/20 text-emerald-300 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-emerald-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-600/10 border border-emerald-500 disabled:border-emerald-500/20 text-white disabled:text-emerald-300 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             {isProcess === asset.id ? (
                                                 <Loader2 className="w-4 h-4 animate-spin" />
                                             ) : completedMilestones.has(asset.id) ? (
                                                 <>
                                                     <CheckCircle2 className="w-4 h-4" />
-                                                    Completado - Pendiente de aprobación
+                                                    Acuerdo firmado ✓
                                                 </>
                                             ) : (
                                                 <>
-                                                    <Check className="w-4 h-4" />
-                                                    Marcar completado
+                                                    <FileText className="w-4 h-4" />
+                                                    Firmar acuerdo de préstamo
                                                 </>
                                             )}
                                         </button>
-                                        {completedMilestones.has(asset.id) && (
+                                        {completedMilestones.has(asset.id) ? (
                                             <p className="text-xs text-slate-400 text-center">
-                                                ✅ Ya marcaste este milestone. El admin puede ahora enviar los fondos.
+                                                ✅ Has firmado el acuerdo. El administrador procederá con el desembolso.
+                                            </p>
+                                        ) : (
+                                            <p className="text-xs text-slate-500 text-center">
+                                                Debes firmar el acuerdo para recibir los fondos. Lee los términos antes de aceptar.
                                             </p>
                                         )}
                                     </div>
