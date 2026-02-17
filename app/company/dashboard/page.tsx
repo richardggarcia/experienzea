@@ -140,6 +140,61 @@ export default function CompanyDashboard() {
 
     const freighter = freighterApi.default ? freighterApi.default : freighterApi;
 
+    // 💰 Balance de USDC de la wallet
+    const [walletBalance, setWalletBalance] = useState<number | null>(null);
+
+    // Función para obtener balance USDC de la wallet
+    const fetchWalletBalance = async (walletAddress: string) => {
+        if (!walletAddress || !usdcIssuer) return;
+        
+        try {
+            // Llamar a Horizon API (testnet)
+            const response = await fetch(
+                `https://horizon-testnet.stellar.org/accounts/${walletAddress}`
+            );
+            
+            if (!response.ok) {
+                console.warn("No se pudo obtener balance de la wallet");
+                return;
+            }
+            
+            const data = await response.json();
+            
+            // Buscar el balance de USDC
+            const usdcBalance = data.balances?.find((b: any) => 
+                b.asset_type === "credit_alphanum4" && 
+                b.asset_code === usdcSymbol &&
+                b.asset_issuer === usdcIssuer
+            );
+            
+            if (usdcBalance) {
+                setWalletBalance(parseFloat(usdcBalance.balance));
+            } else {
+                setWalletBalance(0);
+            }
+        } catch (error) {
+            console.error("Error obteniendo balance:", error);
+        }
+    };
+
+    // Actualizar balance cuando cambia la wallet
+    useEffect(() => {
+        if (address) {
+            fetchWalletBalance(address);
+        }
+    }, [address]);
+
+    // Actualizar balance cada 10 segundos
+    useEffect(() => {
+        if (!address) return;
+        
+        const interval = setInterval(() => {
+            fetchWalletBalance(address);
+        }, 10000);
+        
+        return () => clearInterval(interval);
+    }, [address]);
+
     const showAlert = (message: string, title = "Aviso") => {
         setModalState({
             open: true,
@@ -895,6 +950,14 @@ export default function CompanyDashboard() {
                     </div>
 
                     <div className="flex items-center gap-2 md:gap-4">
+                        {/* 💰 Balance USDC */}
+                        {address && walletBalance !== null && (
+                            <span className="hidden sm:flex items-center gap-2 text-[10px] md:text-xs bg-blue-500/10 text-blue-400 px-3 py-1.5 md:px-4 md:py-2 rounded-full font-mono border border-blue-500/20">
+                                <Coins className="w-3 h-3" />
+                                {walletBalance.toLocaleString()} USDC
+                            </span>
+                        )}
+                        
                         {/* Wallet de la Empresa */}
                         {address ? (
                             <span className="flex items-center gap-2 text-[10px] md:text-xs bg-green-500/10 text-green-400 px-3 py-1.5 md:px-4 md:py-2 rounded-full font-mono border border-green-500/20">

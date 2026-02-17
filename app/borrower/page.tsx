@@ -57,6 +57,47 @@ export default function Dashboard() {
     const testnetPassphrase = "Test SDF Network ; September 2015";
     const freighter = freighterApi.default ? freighterApi.default : freighterApi;
 
+    // 💰 Balance de USDC de la wallet
+    const [walletBalance, setWalletBalance] = useState<number | null>(null);
+    const usdcIssuer = process.env.NEXT_PUBLIC_USDC_ISSUER || "";
+    const usdcSymbol = process.env.NEXT_PUBLIC_USDC_SYMBOL || "USDC";
+
+    // Función para obtener balance USDC de la wallet
+    const fetchWalletBalance = async (walletAddress: string) => {
+        if (!walletAddress || !usdcIssuer) return;
+        
+        try {
+            const response = await fetch(
+                `https://horizon-testnet.stellar.org/accounts/${walletAddress}`
+            );
+            
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            const usdcBalance = data.balances?.find((b: any) => 
+                b.asset_type === "credit_alphanum4" && 
+                b.asset_code === usdcSymbol &&
+                b.asset_issuer === usdcIssuer
+            );
+            
+            setWalletBalance(usdcBalance ? parseFloat(usdcBalance.balance) : 0);
+        } catch (error) {
+            console.error("Error obteniendo balance:", error);
+        }
+    };
+
+    // Actualizar balance cuando cambia la wallet
+    useEffect(() => {
+        if (address) fetchWalletBalance(address);
+    }, [address]);
+
+    // Actualizar balance cada 10 segundos
+    useEffect(() => {
+        if (!address) return;
+        const interval = setInterval(() => fetchWalletBalance(address), 10000);
+        return () => clearInterval(interval);
+    }, [address]);
+
     const showAlert = (message: string, title = "Aviso") => {
         setModalState({
             open: true,
@@ -396,6 +437,14 @@ export default function Dashboard() {
                     <span className="text-xl font-bold tracking-tight font-[family-name:var(--font-syne)]">ExperienZea <span className="text-slate-500 font-normal text-base block md:inline font-[family-name:var(--font-manrope)]">| Dashboard</span></span>
                 </div>
                 <div className="flex items-center gap-4">
+                    {/* 💰 Balance USDC */}
+                    {walletBalance !== null && (
+                        <span className="hidden sm:flex items-center gap-2 text-xs bg-emerald-500/10 text-emerald-400 px-4 py-2 rounded-full font-mono border border-emerald-500/20">
+                            <Coins className="w-3 h-3" />
+                            {walletBalance.toLocaleString()} USDC
+                        </span>
+                    )}
+                    
                     <span className="hidden md:flex items-center gap-2 text-xs bg-blue-500/10 text-blue-400 px-4 py-2 rounded-full font-mono border border-blue-500/20">
                         <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse shadow-[0_0_8px_#3b82f6]"></div>
                         {address.substring(0, 4)}...{address.substring(address.length - 4)}
