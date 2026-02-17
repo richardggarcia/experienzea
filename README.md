@@ -42,6 +42,12 @@ ExperienZea es una plataforma DeFi (Finanzas Descentralizadas) que permite token
 │   (Cloudflare   │     │   (PostgreSQL)  │     │   Work Escrow   │
 │      R2)        │     │                 │     │                 │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
+                                                              │
+                                                              ▼
+                                                    ┌─────────────────┐
+                                                    │   Asset NFT     │
+                                                    │   (Soroban)     │
+                                                    └─────────────────┘
 ```
 
 ## 🛠️ Tecnologías Utilizadas
@@ -171,7 +177,7 @@ npm run dev
 
 ```
 experienzea/
-├── app/
+├── app/                    # Next.js frontend
 │   ├── api/              # API Routes
 │   │   ├── assets/       # CRUD de activos
 │   │   ├── auth/         # NextAuth
@@ -190,12 +196,20 @@ experienzea/
 │   ├── FileUpload.tsx
 │   ├── LoanCalculator.tsx
 │   └── LottieHero.tsx
+├── contracts/            # Smart Contracts (Rust/Soroban)
+│   └── asset-nft/        # Contrato NFT para tokenizar activos
+│       ├── src/
+│       │   ├── lib.rs    # Código del contrato
+│       │   └── test.rs   # Tests
+│       └── Cargo.toml
 ├── hooks/
 │   └── useWallet.ts      # Hook para Freighter
 ├── lib/
 │   ├── db.ts             # Mock DB (desarrollo)
 │   ├── r2.ts             # Configuración R2
 │   └── supabase.ts       # Cliente Supabase
+├── scripts/              # Scripts de utilidad
+│   └── deploy-nft.sh     # Deploy del contrato NFT
 ├── types/
 │   └── next-auth.d.ts    # Tipos de NextAuth
 └── public/               # Assets estáticos
