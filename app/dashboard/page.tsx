@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Building2, User, ArrowRight } from "lucide-react";
+import { Shield, Sprout, ArrowRight, Lock, User } from "lucide-react";
 
 export default function DashboardSelector() {
     return (
@@ -49,28 +49,29 @@ export default function DashboardSelector() {
                         </Link>
                     </motion.div>
 
-                    {/* Opción Empresa */}
+                    {/* Opción Inversor (Próximamente) */}
                     <motion.div
-                        whileHover={{ y: -5 }}
-                        className="group"
+                        className="group opacity-50 cursor-not-allowed"
                     >
-                        <Link
-                            href="/company/login"
-                            className="block bg-slate-900/80 backdrop-blur-xl p-8 rounded-[2rem] border border-white/[0.1] hover:border-blue-500/30 transition-all h-full"
+                        <div
+                            className="block bg-slate-900/40 backdrop-blur-xl p-8 rounded-[2rem] border border-white/[0.05] h-full relative overflow-hidden"
                         >
-                            <div className="w-14 h-14 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-blue-500/20 transition-colors">
-                                <Building2 className="w-7 h-7 text-blue-500" />
+                            <div className="absolute inset-0 bg-slate-950/20 z-10"></div>
+                            <div className="relative z-20">
+                                <div className="w-16 h-16 bg-blue-500/5 rounded-2xl flex items-center justify-center mb-6">
+                                    <Shield className="w-8 h-8 text-blue-500/50" />
+                                </div>
+                                <h2 className="text-2xl font-bold text-slate-500 font-[family-name:var(--font-syne)] mb-3 flex items-center gap-2">
+                                    Soy Inversor <span className="text-xs bg-slate-800 text-slate-400 px-2 py-1 rounded-md font-bold">PRÓXIMAMENTE</span>
+                                </h2>
+                                <p className="text-slate-500 mb-6 leading-relaxed">
+                                    Accedé a oportunidades de inversión respaldadas por activos reales del campo.
+                                </p>
+                                <div className="flex items-center gap-2 text-slate-600 font-bold">
+                                    En desarrollo <Lock className="w-4 h-4 ml-1" />
+                                </div>
                             </div>
-                            <h2 className="text-2xl font-bold text-white font-[family-name:var(--font-syne)] mb-3">
-                                Soy ExperienZea
-                            </h2>
-                            <p className="text-slate-400 mb-6 leading-relaxed">
-                                Acceso administrativo para revisar, aprobar y tokenizar activos.
-                            </p>
-                            <div className="flex items-center gap-2 text-blue-400 font-bold group-hover:gap-3 transition-all">
-                                Ingresar <ArrowRight className="w-5 h-5" />
-                            </div>
-                        </Link>
+                        </div>
                     </motion.div>
                 </div>
 
@@ -82,7 +83,7 @@ export default function DashboardSelector() {
                         ← Volver al inicio
                     </Link>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }

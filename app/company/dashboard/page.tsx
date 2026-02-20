@@ -34,7 +34,8 @@ import {
     ShieldCheck,
     Info,
     AlertTriangle,
-    XCircle
+    XCircle,
+    Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -71,7 +72,7 @@ export default function CompanyDashboard() {
     const [loading, setLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
-    
+
     // 🎯 Estado de los milestones para mostrar indicador visual
     const [milestoneStatuses, setMilestoneStatuses] = useState<Record<string, {
         status?: string;
@@ -109,11 +110,11 @@ export default function CompanyDashboard() {
 
             if (escrowData && escrowData.length > 0) {
                 const escrow = escrowData[0] as any;
-                
+
                 // Si el escrow está completado/released pero la DB dice funding_requested
                 if (escrow?.status === "completed" || escrow?.status === "released") {
                     console.log("✅ El escrow ya está liberado. Actualizando BD...");
-                    
+
                     // Actualizar la base de datos automáticamente
                     const response = await fetch(`/api/assets/${asset.id}`, {
                         method: "PATCH",
@@ -150,27 +151,27 @@ export default function CompanyDashboard() {
     // Función para obtener balance USDC de la wallet
     const fetchWalletBalance = async (walletAddress: string) => {
         if (!walletAddress || !usdcIssuer) return;
-        
+
         try {
             // Llamar a Horizon API (testnet)
             const response = await fetch(
                 `https://horizon-testnet.stellar.org/accounts/${walletAddress}`
             );
-            
+
             if (!response.ok) {
                 console.warn("No se pudo obtener balance de la wallet");
                 return;
             }
-            
+
             const data = await response.json();
-            
+
             // Buscar el balance de USDC
-            const usdcBalance = data.balances?.find((b: any) => 
-                b.asset_type === "credit_alphanum4" && 
+            const usdcBalance = data.balances?.find((b: any) =>
+                b.asset_type === "credit_alphanum4" &&
                 b.asset_code === usdcSymbol &&
                 b.asset_issuer === usdcIssuer
             );
-            
+
             if (usdcBalance) {
                 setWalletBalance(parseFloat(usdcBalance.balance));
             } else {
@@ -191,11 +192,11 @@ export default function CompanyDashboard() {
     // Actualizar balance cada 10 segundos
     useEffect(() => {
         if (!address) return;
-        
+
         const interval = setInterval(() => {
             fetchWalletBalance(address);
         }, 10000);
-        
+
         return () => clearInterval(interval);
     }, [address]);
 
@@ -349,7 +350,7 @@ export default function CompanyDashboard() {
             for (const asset of pendingEscrows) {
                 const contractId = asset.contractId || asset.contract_id;
                 const escrow = escrowData.find((e: any) => e.contractId === contractId) as any;
-                
+
                 if (escrow?.status === "completed" || escrow?.status === "released" || escrow?.flags?.released) {
                     console.log(`✅ Escrow ${contractId} ya liberado. Actualizando BD...`);
                     await fetch(`/api/assets/${asset.id}`, {
@@ -423,16 +424,16 @@ export default function CompanyDashboard() {
 
     const handleReject = async (id: string) => {
         const confirmed = await requestConfirm(
-            "¿Estás seguro de rechazar este activo? Se eliminará permanentemente."
+            "¿Estás seguro de eliminar este activo? Esta acción es irreversible."
         );
         if (!confirmed) return;
-        
+
         setIsProcessing(id);
         try {
             const response = await fetch(`/api/assets/${id}`, {
                 method: 'DELETE',
             });
-            
+
             if (response.ok) {
                 setAssets(assets.filter((a) => a.id !== id));
                 showAlert("✅ Activo rechazado y eliminado", "Listo");
@@ -480,13 +481,13 @@ export default function CompanyDashboard() {
             const contract = new StellarSdk.Contract(nftContractId);
             // Construir URL completa para el metadata
             const documentPath = asset.documents?.property || asset.documents?.insurance || "";
-            const assetUri = documentPath 
+            const assetUri = documentPath
                 ? `${window.location.origin}${documentPath}`
                 : `${window.location.origin}/api/assets/${asset.id}`;
 
             // Usar xdr directamente para tipos específicos
             const { xdr } = StellarSdk;
-            
+
             const tx = new StellarSdk.TransactionBuilder(account, {
                 fee: StellarSdk.BASE_FEE,
                 networkPassphrase: testnetPassphrase,
@@ -715,23 +716,23 @@ export default function CompanyDashboard() {
             });
 
             const milestone = (escrowInfo?.milestones || [])[0] as { status?: string; approved?: boolean } | undefined;
-            
+
             // 🎯 Mostrar estado actual del milestone
             console.log("📊 Estado del milestone:", {
                 status: milestone?.status,
                 approved: milestone?.approved,
                 flags: escrowInfo?.flags
             });
-            
+
             // Si el milestone ya está aprobado, podemos saltar el approve
             const isMilestoneApproved = milestone?.approved || escrowInfo?.flags?.approved;
             const isMilestoneCompleted = milestone?.status === "completed";
-            
+
             if (!isMilestoneCompleted && !isMilestoneApproved) {
                 showAlert("⏳ El Solicitante debe marcar la etapa como completada antes de liberar fondos.\n\nEsperá a que el Solicitante haga click en 'Marcar completado' en su panel.");
                 return;
             }
-            
+
             if (isMilestoneApproved) {
                 console.log("✅ Milestone ya está aprobado, se saltará el paso de approve");
             }
@@ -793,42 +794,42 @@ export default function CompanyDashboard() {
 
             // PASO 2: Aprobar milestone (con manejo de "already approved")
             let approveSuccess = isMilestoneApproved; // ✅ Si ya está aprobado, saltamos este paso
-            
+
             if (isMilestoneApproved) {
                 console.log("⏭️ Saltando approveMilestone - ya está aprobado");
             }
-            
+
             try {
                 if (!approveSuccess) {
-                const approveResponse = await approveMilestone(
-                    {
-                        contractId,
-                        milestoneIndex: "0",
-                        approver: approverAddress || address,
-                    },
-                    "single-release"
-                );
+                    const approveResponse = await approveMilestone(
+                        {
+                            contractId,
+                            milestoneIndex: "0",
+                            approver: approverAddress || address,
+                        },
+                        "single-release"
+                    );
 
-                if (approveResponse?.status === "FAILED") {
-                    const errorMsg = JSON.stringify(approveResponse);
-                    if (errorMsg.includes("already been approved")) {
-                        console.log("⚠️ Milestone ya estaba aprobado, continuando...");
+                    if (approveResponse?.status === "FAILED") {
+                        const errorMsg = JSON.stringify(approveResponse);
+                        if (errorMsg.includes("already been approved")) {
+                            console.log("⚠️ Milestone ya estaba aprobado, continuando...");
+                            approveSuccess = true;
+                        } else {
+                            console.error("Trustless Work: approveMilestone FAILED", approveResponse);
+                            throw new Error("Respuesta FAILED al aprobar milestone");
+                        }
+                    } else if (!approveResponse?.unsignedTransaction) {
+                        console.log("⚠️ No hay transacción de approve, asumiendo que ya está aprobado...");
                         approveSuccess = true;
                     } else {
-                        console.error("Trustless Work: approveMilestone FAILED", approveResponse);
-                        throw new Error("Respuesta FAILED al aprobar milestone");
+                        const approveSend = await signAndSendXdr(approveResponse.unsignedTransaction);
+                        if (!approveSend || approveSend.status !== "SUCCESS") {
+                            console.error("Trustless Work: sendTransaction (approve) FAILED", approveSend);
+                            throw new Error("No se pudo enviar la transaccion de aprobacion");
+                        }
+                        approveSuccess = true;
                     }
-                } else if (!approveResponse?.unsignedTransaction) {
-                    console.log("⚠️ No hay transacción de approve, asumiendo que ya está aprobado...");
-                    approveSuccess = true;
-                } else {
-                    const approveSend = await signAndSendXdr(approveResponse.unsignedTransaction);
-                    if (!approveSend || approveSend.status !== "SUCCESS") {
-                        console.error("Trustless Work: sendTransaction (approve) FAILED", approveSend);
-                        throw new Error("No se pudo enviar la transaccion de aprobacion");
-                    }
-                    approveSuccess = true;
-                }
                 }  // ✅ Cierre del if (!approveSuccess)
             } catch (error: any) {
                 if (error.message?.includes("already been approved")) {
@@ -900,7 +901,7 @@ export default function CompanyDashboard() {
             }
         } catch (error) {
             const MAX_RETRIES = 3;
-            
+
             // 🔄 Auto-retry: si falla pero no terminó, reintentar automáticamente
             if (attempt < MAX_RETRIES) {
                 console.log(`🔄 Error en intento ${attempt}, reintentando automáticamente (${attempt + 1}/${MAX_RETRIES})...`);
@@ -908,7 +909,7 @@ export default function CompanyDashboard() {
                 await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2 segundos
                 return handleSendFunds(asset, attempt + 1);
             }
-            
+
             // Si ya agotó los reintentos, mostrar error
             const err = error as { response?: { status?: number; data?: unknown } };
             if (err?.response) {
@@ -983,23 +984,14 @@ export default function CompanyDashboard() {
     const AssetActions = ({ asset }: { asset: Asset }) => (
         <div className="flex flex-wrap items-center gap-2">
             {asset.status === "pending_review" && (
-                <>
-                    <button
-                        onClick={() => setSelectedAsset(asset)}
-                        className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex items-center gap-2 shadow-lg shadow-blue-500/20"
-                        title="Ver documentos"
-                    >
-                        <FileText className="w-4 h-4" />
-                        <span className="text-sm font-bold">Ver Docs</span>
-                    </button>
-                    <button
-                        onClick={() => handleReject(asset.id)}
-                        className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-lg transition-colors"
-                        title="Rechazar"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
-                </>
+                <button
+                    onClick={() => setSelectedAsset(asset)}
+                    className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex items-center gap-2 shadow-lg shadow-blue-500/20"
+                    title="Ver documentos"
+                >
+                    <FileText className="w-4 h-4" />
+                    <span className="text-sm font-bold">Ver Docs</span>
+                </button>
             )}
 
             {asset.status === "approved" && (
@@ -1041,21 +1033,21 @@ export default function CompanyDashboard() {
                         if (ms?.approved) {
                             return (
                                 <span className="text-xs text-emerald-400 flex items-center gap-1">
-                                    <CheckCircle2 className="w-3 h-3" /> 
+                                    <CheckCircle2 className="w-3 h-3" />
                                     Milestone aprobado - Listo para liberar
                                 </span>
                             );
                         } else if (ms?.completed) {
                             return (
                                 <span className="text-xs text-blue-400 flex items-center gap-1">
-                                    <CheckCircle2 className="w-3 h-3" /> 
+                                    <CheckCircle2 className="w-3 h-3" />
                                     Milestone completado - Pendiente de aprobación
                                 </span>
                             );
                         } else {
                             return (
                                 <span className="text-xs text-yellow-400 flex items-center gap-1">
-                                    <Loader2 className="w-3 h-3 animate-spin" /> 
+                                    <Loader2 className="w-3 h-3 animate-spin" />
                                     Esperando que el Solicitante marque completado...
                                 </span>
                             );
@@ -1081,6 +1073,14 @@ export default function CompanyDashboard() {
                     <CheckCircle2 className="w-3 h-3" /> Completado
                 </span>
             )}
+
+            <button
+                onClick={() => handleReject(asset.id)}
+                className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-lg transition-colors ml-auto"
+                title="Eliminar activo"
+            >
+                <Trash2 className="w-4 h-4" />
+            </button>
         </div>
     );
 
@@ -1114,7 +1114,7 @@ export default function CompanyDashboard() {
                                 {walletBalance.toLocaleString()} USDC
                             </span>
                         )}
-                        
+
                         {/* Wallet de la Empresa */}
                         {address ? (
                             <span className="flex items-center gap-2 text-[10px] md:text-xs bg-green-500/10 text-green-400 px-3 py-1.5 md:px-4 md:py-2 rounded-full font-mono border border-green-500/20">
@@ -1254,10 +1254,10 @@ export default function CompanyDashboard() {
                                                                 {(asset.status === "tokenized" ||
                                                                     asset.status === "funding_requested" ||
                                                                     asset.status === "funded") && (
-                                                                    <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 text-[10px] font-semibold">
-                                                                        <Coins className="w-3 h-3" /> NFT emitido
-                                                                    </div>
-                                                                )}
+                                                                        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 text-[10px] font-semibold">
+                                                                            <Coins className="w-3 h-3" /> NFT emitido
+                                                                        </div>
+                                                                    )}
                                                                 <p className="text-[10px] text-slate-500 font-mono">
                                                                     ID: {asset.id.slice(0, 8)}...
                                                                 </p>
@@ -1299,22 +1299,22 @@ export default function CompanyDashboard() {
                                             className="bg-slate-900 border border-white/[0.05] rounded-2xl p-5 shadow-lg relative overflow-hidden"
                                         >
                                             <div className="flex justify-between items-start mb-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-blue-400">
-                                                    {getIcon(asset.type)}
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-blue-400">
+                                                        {getIcon(asset.type)}
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-bold text-white">{asset.name}</h3>
+                                                        {(asset.status === "tokenized" ||
+                                                            asset.status === "funding_requested" ||
+                                                            asset.status === "funded") && (
+                                                                <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 text-[10px] font-semibold">
+                                                                    <Coins className="w-3 h-3" /> NFT emitido
+                                                                </div>
+                                                            )}
+                                                        <p className="text-xs text-slate-500">{asset.owner}</p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <h3 className="font-bold text-white">{asset.name}</h3>
-                                                    {(asset.status === "tokenized" ||
-                                                        asset.status === "funding_requested" ||
-                                                        asset.status === "funded") && (
-                                                        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 text-[10px] font-semibold">
-                                                            <Coins className="w-3 h-3" /> NFT emitido
-                                                        </div>
-                                                    )}
-                                                    <p className="text-xs text-slate-500">{asset.owner}</p>
-                                                </div>
-                                            </div>
                                                 <div className="text-right">
                                                     <p className="text-lg font-bold text-white font-[family-name:var(--font-syne)]">
                                                         ${asset.value.toLocaleString()}
@@ -1513,13 +1513,13 @@ export default function CompanyDashboard() {
             </AnimatePresence>
 
             {modalState.open && (
-                <motion.div 
+                <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm px-4"
                 >
-                    <motion.div 
+                    <motion.div
                         initial={{ scale: 0.95, opacity: 0, y: 20 }}
                         animate={{ scale: 1, opacity: 1, y: 0 }}
                         exit={{ scale: 0.95, opacity: 0, y: 20 }}
@@ -1575,13 +1575,12 @@ export default function CompanyDashboard() {
                                     modalResolverRef.current?.(true);
                                     modalResolverRef.current = null;
                                 }}
-                                className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all shadow-lg ${
-                                    modalState.title.toLowerCase().includes('error')
+                                className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all shadow-lg ${modalState.title.toLowerCase().includes('error')
                                         ? 'bg-red-600 text-white hover:bg-red-500 shadow-red-500/20'
                                         : modalState.title.toLowerCase().includes('éxito') || modalState.title.toLowerCase().includes('listo')
-                                        ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-500/20'
-                                        : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20'
-                                }`}
+                                            ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-500/20'
+                                            : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20'
+                                    }`}
                             >
                                 {modalState.confirmLabel}
                             </button>
