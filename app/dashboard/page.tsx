@@ -31,7 +31,7 @@ export default function DashboardSelector() {
                         className="group"
                     >
                         <Link
-                            href="/borrower"
+                            href="/solicitante"
                             className="block bg-slate-900/80 backdrop-blur-xl p-8 rounded-[2rem] border border-white/[0.1] hover:border-orange-500/30 transition-all h-full"
                         >
                             <div className="w-14 h-14 bg-orange-500/10 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-orange-500/20 transition-colors">

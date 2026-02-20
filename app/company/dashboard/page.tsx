@@ -728,7 +728,7 @@ export default function CompanyDashboard() {
             const isMilestoneCompleted = milestone?.status === "completed";
             
             if (!isMilestoneCompleted && !isMilestoneApproved) {
-                showAlert("⏳ El borrower debe marcar el milestone como completado antes de liberar fondos.\n\nEsperá a que el borrower haga click en 'Marcar completado' en su dashboard.");
+                showAlert("⏳ El Solicitante debe marcar la etapa como completada antes de liberar fondos.\n\nEsperá a que el Solicitante haga click en 'Marcar completado' en su panel.");
                 return;
             }
             
@@ -1056,7 +1056,7 @@ export default function CompanyDashboard() {
                             return (
                                 <span className="text-xs text-yellow-400 flex items-center gap-1">
                                     <Loader2 className="w-3 h-3 animate-spin" /> 
-                                    Esperando que borrower marque completado...
+                                    Esperando que el Solicitante marque completado...
                                 </span>
                             );
                         }

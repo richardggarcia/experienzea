@@ -55,10 +55,10 @@ export default function LoanCalculator() {
                 </div>
 
                 <Link
-                    href="/borrower"
-                    className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-[0_10px_30px_rgba(37,99,235,0.3)] transition-all flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95"
+                    href="/solicitante"
+                    className="flex-1 py-4 bg-orange-500 hover:bg-orange-600 active:scale-95 transition-all text-slate-900 font-bold font-[family-name:var(--font-syne)] rounded-2xl flex items-center justify-center gap-2 group"
                 >
-                    Solicitar este Monto <ArrowRight className="w-5 h-5" />
+                    Ir al Panel Solicitante <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
             </div>
         </div>

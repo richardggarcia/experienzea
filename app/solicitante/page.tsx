@@ -65,21 +65,21 @@ export default function Dashboard() {
     // Función para obtener balance USDC de la wallet
     const fetchWalletBalance = async (walletAddress: string) => {
         if (!walletAddress || !usdcIssuer) return;
-        
+
         try {
             const response = await fetch(
                 `https://horizon-testnet.stellar.org/accounts/${walletAddress}`
             );
-            
+
             if (!response.ok) return;
-            
+
             const data = await response.json();
-            const usdcBalance = data.balances?.find((b: any) => 
-                b.asset_type === "credit_alphanum4" && 
+            const usdcBalance = data.balances?.find((b: any) =>
+                b.asset_type === "credit_alphanum4" &&
                 b.asset_code === usdcSymbol &&
                 b.asset_issuer === usdcIssuer
             );
-            
+
             setWalletBalance(usdcBalance ? parseFloat(usdcBalance.balance) : 0);
         } catch (error) {
             console.error("Error obteniendo balance:", error);
@@ -117,7 +117,7 @@ export default function Dashboard() {
     // 🔄 Polling automático cada 5 segundos para escrows en funding_requested
     useEffect(() => {
         if (!address) return;
-        
+
         const hasPendingEscrows = assets.some(a => a.status === 'funding_requested');
         if (!hasPendingEscrows) return;
 
@@ -403,13 +403,13 @@ export default function Dashboard() {
         } catch (error: any) {
             const MAX_RETRIES = 2;
             const errorMsg = error?.message || "";
-            
+
             // 🔄 Si es "already completed", tratar como éxito
             if (errorMsg.includes("already") || errorMsg.includes("completed")) {
                 console.log("⚠️ Milestone ya completado (catch)");
                 setCompletedMilestones((prev) => new Set(prev).add(asset.id));
                 showAlert("✅ Acuerdo ya firmado", "Listo");
-            } 
+            }
             // 🔄 Auto-retry para otros errores
             else if (attempt < MAX_RETRIES) {
                 console.log(`🔄 Reintentando firma (${attempt + 1}/${MAX_RETRIES})...`);
@@ -444,7 +444,7 @@ export default function Dashboard() {
                             {walletBalance.toLocaleString()} USDC
                         </span>
                     )}
-                    
+
                     <span className="hidden md:flex items-center gap-2 text-xs bg-blue-500/10 text-blue-400 px-4 py-2 rounded-full font-mono border border-blue-500/20">
                         <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse shadow-[0_0_8px_#3b82f6]"></div>
                         {address.substring(0, 4)}...{address.substring(address.length - 4)}
@@ -480,10 +480,10 @@ export default function Dashboard() {
                     <div className="bg-slate-900/50 p-6 rounded-[2rem] shadow-lg border border-white/[0.05] backdrop-blur-sm group hover:border-blue-500/20 transition-all">
                         <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-2 font-[family-name:var(--font-syne)]">Liquidez Disponible</p>
                         <p className="text-4xl font-bold text-white mb-1 font-[family-name:var(--font-syne)]">
-                            {walletBalance !== null 
-                                ? `$${walletBalance.toLocaleString()}` 
+                            {walletBalance !== null
+                                ? `$${walletBalance.toLocaleString()}`
                                 : '---'
-                            } 
+                            }
                             <span className="text-lg text-slate-500 font-normal font-[family-name:var(--font-manrope)]">USDC</span>
                         </p>
                     </div>
@@ -524,7 +524,7 @@ export default function Dashboard() {
                                     <p className="text-2xl font-bold text-white font-[family-name:var(--font-syne)]">${asset.value.toLocaleString()}</p>
                                 </div>
 
-                                {/* STATUS MESSAGES FOR BORROWER */}
+                                {/* STATUS MESSAGES FOR SOLICITANTE */}
 
                                 {asset.status === 'pending_review' && (
                                     <div className="w-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2">
@@ -547,9 +547,9 @@ export default function Dashboard() {
                                 {asset.status === 'funding_requested' && (
                                     <div className="w-full space-y-3">
                                         <div className="w-full bg-blue-500/10 border border-blue-500/20 text-blue-500 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2">
-                                            <FileText className="w-4 h-4" /> 
-                                            {completedMilestones.has(asset.id) 
-                                                ? "Acuerdo firmado - Procesando" 
+                                            <FileText className="w-4 h-4" />
+                                            {completedMilestones.has(asset.id)
+                                                ? "Acuerdo firmado - Procesando"
                                                 : "Pendiente de firma del acuerdo"}
                                         </div>
                                         <button
@@ -648,7 +648,7 @@ export default function Dashboard() {
                                             }
                                             return null;
                                         })()}
-                                        
+
                                         <div className="flex justify-between items-center mb-6">
                                             <h2 className="text-2xl font-bold text-white font-[family-name:var(--font-syne)]">Carga de Seguro Colateral</h2>
                                             <button type="button" onClick={() => setShowForm(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400"><X className="w-5 h-5" /></button>

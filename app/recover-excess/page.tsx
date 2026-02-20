@@ -12,7 +12,7 @@ export default function RecoverExcess() {
     const { releaseFunds } = useReleaseFunds();
     const { sendTransaction } = useSendTransaction();
     const { getEscrowByContractIds } = useGetEscrowFromIndexerByContractIds();
-    
+
     // Contract ID del escrow con doble fondeo (500 + 500 = 1000)
     const [contractId, setContractId] = useState("CCY5SY3PE5UKTSJSWKR5SOYBRLUBJW3BFHJMXBIEEIOSWIL45ACJWBYC");
     const [loading, setLoading] = useState(false);
@@ -25,7 +25,7 @@ export default function RecoverExcess() {
 
     const checkEscrowStatus = async () => {
         if (!contractId) return;
-        
+
         try {
             const data = await getEscrowByContractIds({ contractIds: [contractId] });
             if (data && data.length > 0) {
@@ -98,7 +98,7 @@ export default function RecoverExcess() {
             console.log("📤 Respuesta:", sendResponse);
 
             if (sendResponse?.status === "SUCCESS") {
-                setResult("✅ ¡Fondos liberados! Los 1000 USDC fueron al borrower.");
+                setResult("✅ ¡Fondos liberados! Los 1000 USDC fueron al Solicitante.");
             } else {
                 setError("La transacción no se completó");
             }
@@ -123,7 +123,7 @@ export default function RecoverExcess() {
                     </div>
                     <h1 className="text-2xl font-bold mb-2">Recuperar Excedente</h1>
                     <p className="text-slate-400">
-                        El escrow de 500 USDC tiene 1000 USDC (doble fondeo).<br/>
+                        El escrow de 500 USDC tiene 1000 USDC (doble fondeo).<br />
                         Liberar los fondos para recuperar el excedente.
                     </p>
                 </div>
@@ -170,8 +170,8 @@ export default function RecoverExcess() {
                         </div>
 
                         <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl text-sm text-yellow-400">
-                            <strong>⚠️ Importante:</strong> Al liberar, los 1000 USDC irán al borrower. 
-                            Luego deberás coordinar con el borrower para que te devuelva los 500 USDC extra.
+                            <strong>⚠️ Importante:</strong> Al liberar, los 1000 USDC irán al Solicitante.
+                            Luego deberás coordinar con el Solicitante para que te devuelva los 500 USDC extra.
                         </div>
 
                         <button
