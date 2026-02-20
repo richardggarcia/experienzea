@@ -42,6 +42,15 @@ export default function Dashboard() {
     const [showForm, setShowForm] = useState(false);
     const [tempAssetId, setTempAssetId] = useState<string>("");
     const [completedMilestones, setCompletedMilestones] = useState<Set<string>>(new Set());
+    const [termsModalState, setTermsModalState] = useState<{
+        open: boolean;
+        asset: Asset | null;
+        accepted: boolean;
+    }>({
+        open: false,
+        asset: null,
+        accepted: false,
+    });
     const [modalState, setModalState] = useState({
         open: false,
         title: "",
@@ -553,7 +562,7 @@ export default function Dashboard() {
                                                 : "Pendiente de firma del acuerdo"}
                                         </div>
                                         <button
-                                            onClick={() => handleFirmarAcuerdo(asset)}
+                                            onClick={() => setTermsModalState({ open: true, asset: asset, accepted: false })}
                                             disabled={isProcess === asset.id || completedMilestones.has(asset.id)}
                                             className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-600/10 border border-emerald-500 disabled:border-emerald-500/20 text-white disabled:text-emerald-300 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
@@ -768,6 +777,94 @@ export default function Dashboard() {
                     </div>
                 </div>
             )}
+
+            {/* Terms and Conditions Modal */}
+            <AnimatePresence>
+                {termsModalState.open && termsModalState.asset && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 backdrop-blur-md px-4"
+                        onClick={() => setTermsModalState({ open: false, asset: null, accepted: false })}
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-slate-900 shadow-2xl overflow-hidden relative"
+                        >
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-[50px] rounded-full pointer-events-none"></div>
+
+                            <div className="p-8 border-b border-white/[0.05] relative z-10">
+                                <h3 className="text-2xl font-bold text-white font-[family-name:var(--font-syne)] mb-2">
+                                    Acuerdo de Préstamo Garantizado
+                                </h3>
+                                <p className="text-sm text-slate-400 font-[family-name:var(--font-manrope)]">
+                                    Revisá los términos antes de proceder con la firma del contrato inteligente.
+                                </p>
+                            </div>
+
+                            <div className="p-8 space-y-6 relative z-10">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-slate-950 p-5 rounded-[1.5rem] border border-white/[0.05]">
+                                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-2 font-bold">Monto a recibir</p>
+                                        <p className="text-2xl font-bold text-white font-[family-name:var(--font-syne)]">${termsModalState.asset.value.toLocaleString()} USDC</p>
+                                    </div>
+                                    <div className="bg-slate-950 p-5 rounded-[1.5rem] border border-white/[0.05]">
+                                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-2 font-bold">Tasa Anual</p>
+                                        <p className="text-2xl font-bold text-blue-400 font-[family-name:var(--font-syne)]">10% APR</p>
+                                    </div>
+                                </div>
+
+                                <div className="bg-blue-500/5 border border-blue-500/20 p-5 rounded-[1.5rem]">
+                                    <h4 className="font-bold text-blue-400 mb-3 flex items-center gap-2 font-[family-name:var(--font-syne)]">
+                                        <ShieldCheck className="w-5 h-5" /> Política de Garantía (NFT)
+                                    </h4>
+                                    <p className="text-sm text-slate-300 leading-relaxed text-justify font-[family-name:var(--font-manrope)]">
+                                        Al aceptar este contrato, el NFT representativo de su activo <strong className="text-white font-[family-name:var(--font-syne)]">({termsModalState.asset.name})</strong> quedará bloqueado en un contrato inteligente de garantía.
+                                        En caso de incumplimiento de pago a la fecha de vencimiento, la propiedad digital del activo pasará a ExperienZea o sus inversores para la liquidación correspondiente.
+                                    </p>
+                                </div>
+
+                                <div className="flex items-start gap-3 mt-8 bg-slate-950/50 p-4 rounded-xl border border-white/[0.02]">
+                                    <input
+                                        type="checkbox"
+                                        id="acceptTerms"
+                                        checked={termsModalState.accepted}
+                                        onChange={(e) => setTermsModalState(prev => ({ ...prev, accepted: e.target.checked }))}
+                                        className="mt-1 w-5 h-5 accent-blue-500 bg-slate-950 border-slate-700 justify-center cursor-pointer rounded"
+                                    />
+                                    <label htmlFor="acceptTerms" className="text-sm text-slate-400 hover:text-slate-300 cursor-pointer select-none transition-colors">
+                                        He leído y acepto los términos y condiciones del préstamo, así como la política de ejecución de garantía aplicable a mis activos digitalizados.
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div className="p-6 bg-slate-950/50 border-t border-white/[0.05] flex gap-4 relative z-10">
+                                <button
+                                    onClick={() => setTermsModalState({ open: false, asset: null, accepted: false })}
+                                    className="w-1/3 py-4 rounded-xl border border-white/10 text-slate-400 font-bold hover:bg-white/5 hover:text-white transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    disabled={!termsModalState.accepted}
+                                    onClick={() => {
+                                        handleFirmarAcuerdo(termsModalState.asset!);
+                                        setTermsModalState({ open: false, asset: null, accepted: false });
+                                    }}
+                                    className="w-2/3 py-4 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 transition-colors shadow-[0_0_20px_rgba(37,99,235,0.2)] disabled:shadow-none flex items-center justify-center gap-2"
+                                >
+                                    <FileText className="w-5 h-5" />
+                                    Firmar y Recibir Fondos
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
