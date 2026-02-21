@@ -604,6 +604,11 @@ export default function CompanyDashboard() {
     const visibleAssets = useMemo(() => {
         return filterVisibleEscrowLeaderAssets(assets, escrowActionOwnerByAssetId);
     }, [assets, escrowActionOwnerByAssetId]);
+    const normalizeLoanStatus = (status?: string) => (status || "").trim().toLowerCase();
+    const isPendingLoan = (status?: string) => {
+        const normalized = normalizeLoanStatus(status);
+        return normalized === "pending" || normalized === "approved";
+    };
     const unifiedBorrowers = useMemo(() => {
         type BorrowerView = {
             borrowerWallet: string;
@@ -637,6 +642,9 @@ export default function CompanyDashboard() {
                 return;
             }
             current.assets.push(asset);
+            if (asset.status === "pending_review") {
+                current.pendingCount += 1;
+            }
             grouped.set(wallet, current);
         });
 
@@ -653,7 +661,7 @@ export default function CompanyDashboard() {
             };
             current.borrowerName = loan.borrower_name || current.borrowerName;
             current.loans.push(loan);
-            current.pendingCount += loan.status === "pending" ? 1 : 0;
+            current.pendingCount += isPendingLoan(loan.status) ? 1 : 0;
             current.totalRequested += loan.amount_requested || 0;
             grouped.set(wallet, current);
         });
@@ -1507,7 +1515,7 @@ export default function CompanyDashboard() {
                                 </p>
                             </div>
                             <div className="inline-flex items-center gap-2 rounded-full bg-orange-500/10 text-orange-300 border border-orange-500/20 px-3 py-1 text-xs font-semibold">
-                                <Coins className="w-4 h-4" /> {loanRequests.filter((lr) => lr.status === "pending").length} pendientes
+                                <Coins className="w-4 h-4" /> {assets.filter((a) => a.status === "pending_review").length + loanRequests.filter((lr) => isPendingLoan(lr.status)).length} pendientes
                             </div>
                         </div>
                     </div>
@@ -1587,10 +1595,11 @@ export default function CompanyDashboard() {
                                             {borrower.loans.map((lr) => {
                                                 const lrAssets = assets.filter((a) => lr.asset_ids.includes(a.id));
                                                 // Definir visuales del estado
-                                                const isPending = lr.status === "pending";
-                                                const isFunded = lr.status === "funded";
+                                                const normalizedLoanStatus = normalizeLoanStatus(lr.status);
+                                                const isPending = isPendingLoan(normalizedLoanStatus);
+                                                const isFunded = normalizedLoanStatus === "funded";
                                                 const dotColor = isPending ? "bg-yellow-500" : isFunded ? "bg-emerald-500" : "bg-purple-500";
-                                                const statusText = isPending ? "En revisión / Pendiente" : lr.status === "approved" ? "Aprobado" : lr.status === "escrow_created" ? "Escrow Creado" : "Préstamo Acreditado";
+                                                const statusText = isPending ? "En revisión / Pendiente" : normalizedLoanStatus === "approved" ? "Aprobado" : normalizedLoanStatus === "escrow_created" ? "Escrow Creado" : "Préstamo Acreditado";
 
                                                 return (
                                                     <div key={lr.id} className="bg-slate-900/40 rounded-xl p-4 border border-white/[0.03] hover:border-white/[0.08] transition-colors relative overflow-hidden group">
@@ -1626,7 +1635,7 @@ export default function CompanyDashboard() {
                                                             </div>
 
                                                             <div className="flex items-center gap-2 md:w-auto w-full">
-                                                                {lr.status === "pending" && (
+                                                                {isPendingLoan(lr.status) && (
                                                                     <button
                                                                         onClick={() => handleCreateEscrowFromLoanRequest(lr)}
                                                                         disabled={isProcessing === lr.id}
