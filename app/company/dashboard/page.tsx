@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@/hooks/useWallet";
@@ -38,6 +38,11 @@ import {
     Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+    buildEscrowActionOwnerMap,
+    buildEscrowGroupsByLeaderId,
+    filterVisibleEscrowLeaderAssets,
+} from "@/lib/escrowGrouping";
 
 // Asset Type desde Supabase
 interface Asset {
@@ -62,15 +67,30 @@ interface Asset {
     };
 }
 
+interface LoanRequest {
+    id: string;
+    borrower_wallet: string;
+    borrower_name: string;
+    amount_requested: number;
+    collateral_value: number;
+    ltv_ratio: number;
+    asset_ids: string[];
+    status: string;
+    contract_id?: string;
+    created_at: string;
+}
+
 export default function CompanyDashboard() {
     const { data: session, status } = useSession();
     const router = useRouter();
     const { address, connect, disconnect, isConnecting } = useWallet();
 
     const [assets, setAssets] = useState<Asset[]>([]);
+    const [loanRequests, setLoanRequests] = useState<LoanRequest[]>([]);
     const [docsReviewed, setDocsReviewed] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
+    const [isDeletingLoanRequestId, setIsDeletingLoanRequestId] = useState<string | null>(null);
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
 
     // 🎯 Estado de los milestones para mostrar indicador visual
@@ -88,6 +108,28 @@ export default function CompanyDashboard() {
         hideCancel: false,
     });
     const modalResolverRef = useRef<((value: boolean) => void) | null>(null);
+    const escrowActionOwnerByAssetId = useMemo(
+        () => buildEscrowActionOwnerMap(assets),
+        [assets]
+    );
+    const loanRequestByContractId = useMemo(() => {
+        const map = new Map<string, LoanRequest>();
+        loanRequests.forEach((loan) => {
+            if (loan.contract_id) {
+                map.set(loan.contract_id, loan);
+            }
+        });
+        return map;
+    }, [loanRequests]);
+    const loanAmountByAssetId = useMemo(() => {
+        const map = new Map<string, number>();
+        loanRequests.forEach((loan) => {
+            loan.asset_ids.forEach((assetId) => {
+                map.set(assetId, loan.amount_requested);
+            });
+        });
+        return map;
+    }, [loanRequests]);
 
     const { deployEscrow } = useInitializeEscrow();
     const { fundEscrow } = useFundEscrow();
@@ -115,18 +157,35 @@ export default function CompanyDashboard() {
                 if (escrow?.status === "completed" || escrow?.status === "released") {
                     console.log("✅ El escrow ya está liberado. Actualizando BD...");
 
-                    // Actualizar la base de datos automáticamente
-                    const response = await fetch(`/api/assets/${asset.id}`, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ status: "funded" }),
+                    const relatedAssets = assets.filter((item) => {
+                        const itemContractId = item.contractId || item.contract_id;
+                        return itemContractId === contractId;
                     });
+                    const assetsToPatch = relatedAssets.length > 0 ? relatedAssets : [asset];
 
-                    if (response.ok) {
-                        await fetchAssets();
-                        showAlert("Los fondos ya fueron liberados anteriormente. El estado se ha actualizado.", "Escrow ya liberado");
-                        return true;
+                    await Promise.all(
+                        assetsToPatch.map(async (item) => {
+                            await fetch(`/api/assets/${item.id}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ status: "funded" }),
+                            });
+                        })
+                    );
+
+                    const linkedLoan = loanRequestByContractId.get(contractId);
+                    if (linkedLoan) {
+                        await fetch(`/api/loan-requests/${linkedLoan.id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ status: "funded" }),
+                        });
                     }
+
+                    await fetchAssets();
+                    await fetchLoanRequests();
+                    showAlert("Los fondos ya fueron liberados anteriormente. El estado se ha actualizado.", "Escrow ya liberado");
+                    return true;
                 }
             }
             return false;
@@ -387,12 +446,223 @@ export default function CompanyDashboard() {
         }
     };
 
+    const fetchLoanRequests = async () => {
+        try {
+            const res = await fetch('/api/loan-requests');
+            if (res.ok) {
+                const data = await res.json();
+                setLoanRequests(data);
+            }
+        } catch (error) {
+            console.error('Error fetching loan requests:', error);
+        }
+    };
+
+    const handleDeleteLoanRequest = async (loanId: string) => {
+        const confirmed = await requestConfirm(
+            "¿Eliminar esta solicitud de préstamo del panel? En modo prueba se borrará aunque ya esté en otro estado.",
+            "Eliminar solicitud"
+        );
+        if (!confirmed) return;
+
+        setIsDeletingLoanRequestId(loanId);
+        try {
+            const response = await fetch(`/api/loan-requests/${loanId}?force=1`, {
+                method: "DELETE",
+            });
+
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.error || "No se pudo eliminar la solicitud");
+            }
+
+            setLoanRequests((prev) => prev.filter((loan) => loan.id !== loanId));
+            showAlert("Solicitud eliminada.", "Listo");
+        } catch (error) {
+            console.error("Error deleting loan request:", error);
+            showAlert("No se pudo eliminar la solicitud.");
+        } finally {
+            setIsDeletingLoanRequestId(null);
+        }
+    };
+
+    const handleCreateEscrowFromLoanRequest = async (lr: LoanRequest) => {
+        if (!address) {
+            showAlert("Conecta la wallet primero");
+            return;
+        }
+
+        const borrowerWallet = lr.borrower_wallet;
+        if (!borrowerWallet) {
+            showAlert("No se encontró la wallet del solicitante");
+            return;
+        }
+
+        setIsProcessing(lr.id);
+        try {
+            const payload = {
+                signer: address,
+                engagementId: lr.id,
+                title: `Prestamo $${lr.amount_requested.toLocaleString()} - ${lr.borrower_name}`,
+                roles: {
+                    approver: address,
+                    serviceProvider: borrowerWallet,
+                    platformAddress: address,
+                    releaseSigner: address,
+                    disputeResolver: address,
+                    receiver: borrowerWallet,
+                },
+                description: `Prestamo de $${lr.amount_requested.toLocaleString()} respaldado por ${lr.asset_ids.length} garantia(s). Colateral total: $${lr.collateral_value.toLocaleString()}`,
+                amount: lr.amount_requested,
+                platformFee: 0,
+                milestones: [{ description: `Desembolso prestamo $${lr.amount_requested.toLocaleString()}` }],
+                trustline: {
+                    symbol: usdcSymbol,
+                    address: usdcIssuer,
+                },
+            };
+
+            const response = await deployEscrow(payload, "single-release");
+            if (response?.status === "FAILED") throw new Error("deployEscrow FAILED");
+            if (!response?.unsignedTransaction) throw new Error("No unsigned transaction");
+
+            const sendResponse = await signAndSendXdr(response.unsignedTransaction);
+            if (!sendResponse || sendResponse.status !== "SUCCESS") throw new Error("Send failed");
+
+            const contractId = (response as any).contractId || await waitForEscrowContractId(address, lr.id);
+            console.log("📝 Contract ID obtenido:", contractId);
+
+            const lrPatchBody: any = { status: "escrow_created" };
+            if (contractId) lrPatchBody.contract_id = contractId;
+            await fetch(`/api/loan-requests/${lr.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(lrPatchBody),
+            });
+
+            for (const assetId of lr.asset_ids) {
+                try {
+                    const assetPatchBody: any = { status: "funding_requested" };
+                    if (contractId) assetPatchBody.contract_id = contractId;
+                    const patchRes = await fetch(`/api/assets/${assetId}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(assetPatchBody),
+                    });
+                    if (!patchRes.ok) {
+                        console.error(`⚠️ Error actualizando asset ${assetId}:`, await patchRes.text());
+                    }
+                } catch (patchErr) {
+                    console.error(`⚠️ Error PATCH asset ${assetId}:`, patchErr);
+                }
+            }
+
+            await fetchAssets();
+            await fetchLoanRequests();
+            showAlert("Escrow creado exitosamente", "Éxito");
+        } catch (err) {
+            console.error(err);
+            showAlert("Error creando el escrow. Revisa la consola.");
+        } finally {
+            setIsProcessing(null);
+        }
+    };
+
     // Redirect si no está autenticado
     useEffect(() => {
         if (status === "unauthenticated") {
             router.push("/company/login");
         }
     }, [status, router]);
+
+    // Fetch loan requests cuando carga
+    useEffect(() => {
+        if (session) {
+            fetchLoanRequests();
+        }
+    }, [session]);
+
+    const isEscrowActionOwner = (asset: Asset) => {
+        const contractId = asset.contractId || asset.contract_id;
+        if (!contractId) return true;
+        return escrowActionOwnerByAssetId.get(asset.id) ?? true;
+    };
+    const getLoanAmountForAsset = (asset: Asset) => {
+        const contractId = asset.contractId || asset.contract_id;
+        if (contractId) {
+            const contractLoan = loanRequestByContractId.get(contractId);
+            if (contractLoan?.amount_requested) {
+                return contractLoan.amount_requested;
+            }
+        }
+        return loanAmountByAssetId.get(asset.id) ?? asset.value;
+    };
+    const escrowGroupedAssetsByLeaderId = useMemo(
+        () => buildEscrowGroupsByLeaderId(assets),
+        [assets]
+    );
+    const visibleAssets = useMemo(() => {
+        return filterVisibleEscrowLeaderAssets(assets, escrowActionOwnerByAssetId);
+    }, [assets, escrowActionOwnerByAssetId]);
+    const unifiedBorrowers = useMemo(() => {
+        type BorrowerView = {
+            borrowerWallet: string;
+            borrowerName: string;
+            assets: Asset[];
+            totalAssetsCount: number;
+            loans: LoanRequest[];
+            pendingCount: number;
+            totalRequested: number;
+        };
+
+        const grouped = new Map<string, BorrowerView>();
+
+        assets.forEach((asset) => {
+            const wallet = asset.ownerWallet || asset.owner_wallet || "sin-wallet";
+            const current = grouped.get(wallet) || {
+                borrowerWallet: wallet,
+                borrowerName: asset.owner || "Sin nombre",
+                assets: [],
+                totalAssetsCount: 0,
+                loans: [],
+                pendingCount: 0,
+                totalRequested: 0,
+            };
+            current.totalAssetsCount += 1;
+            if (
+                (asset.status === "funding_requested" || asset.status === "funded") &&
+                !isEscrowActionOwner(asset)
+            ) {
+                grouped.set(wallet, current);
+                return;
+            }
+            current.assets.push(asset);
+            grouped.set(wallet, current);
+        });
+
+        loanRequests.forEach((loan) => {
+            const wallet = loan.borrower_wallet || "sin-wallet";
+            const current = grouped.get(wallet) || {
+                borrowerWallet: wallet,
+                borrowerName: loan.borrower_name || "Sin nombre",
+                assets: [],
+                totalAssetsCount: 0,
+                loans: [],
+                pendingCount: 0,
+                totalRequested: 0,
+            };
+            current.borrowerName = loan.borrower_name || current.borrowerName;
+            current.loans.push(loan);
+            current.pendingCount += loan.status === "pending" ? 1 : 0;
+            current.totalRequested += loan.amount_requested || 0;
+            grouped.set(wallet, current);
+        });
+
+        return Array.from(grouped.values()).sort((a, b) => {
+            if (b.pendingCount !== a.pendingCount) return b.pendingCount - a.pendingCount;
+            return b.totalRequested - a.totalRequested;
+        });
+    }, [assets, loanRequests, isEscrowActionOwner]);
 
     if (status === "loading") {
         return (
@@ -744,11 +1014,12 @@ export default function CompanyDashboard() {
 
             const balances = await getMultipleBalances({ addresses: [contractId] });
             const currentBalance = balances?.[0]?.balance || 0;
+            const loanAmount = getLoanAmountForAsset(asset);
 
             const confirmMessage =
                 currentBalance > 0
-                    ? "El escrow ya está fondeado. Se aprobará el milestone y se liberarán los fondos."
-                    : "¿Confirmás el envío de fondos al solicitante? Esta acción fondea y libera USDC.";
+                    ? `El escrow ya está fondeado. Se aprobará el milestone y se liberarán ${loanAmount} USDC.`
+                    : `¿Confirmás el envío de ${loanAmount} USDC al solicitante? Esta acción fondea y libera USDC.`;
 
             const confirmed = await requestConfirm(confirmMessage);
             if (!confirmed) return;
@@ -769,7 +1040,7 @@ export default function CompanyDashboard() {
             if (currentBalance <= 0) {
                 const fundResponse = await fundEscrow(
                     {
-                        amount: asset.value,
+                        amount: loanAmount,
                         contractId,
                         signer: address,
                     },
@@ -888,17 +1159,34 @@ export default function CompanyDashboard() {
                 throw new Error("No se pudieron liberar los fondos");
             }
 
-            const response = await fetch(`/api/assets/${asset.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    status: "funded",
-                }),
+            const relatedAssets = assets.filter((item) => {
+                const itemContractId = item.contractId || item.contract_id;
+                return itemContractId === contractId;
             });
-            if (response.ok) {
-                await fetchAssets();
-                showAlert("✅ Fondos enviados correctamente al solicitante", "Listo");
+            const assetsToPatch = relatedAssets.length > 0 ? relatedAssets : [asset];
+
+            await Promise.all(
+                assetsToPatch.map(async (item) => {
+                    await fetch(`/api/assets/${item.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ status: "funded" }),
+                    });
+                })
+            );
+
+            const linkedLoan = loanRequestByContractId.get(contractId);
+            if (linkedLoan) {
+                await fetch(`/api/loan-requests/${linkedLoan.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ status: "funded" }),
+                });
             }
+
+            await fetchAssets();
+            await fetchLoanRequests();
+            showAlert("✅ Fondos enviados correctamente al solicitante", "Listo");
         } catch (error) {
             const MAX_RETRIES = 3;
 
@@ -969,6 +1257,22 @@ export default function CompanyDashboard() {
                 );
         }
     };
+    const getAssetStatusLabel = (status: Asset["status"]) => {
+        switch (status) {
+            case "pending_review":
+                return "En revisión";
+            case "approved":
+                return "Aprobado";
+            case "tokenized":
+                return "Tokenizado";
+            case "funding_requested":
+                return "Escrow creado";
+            case "funded":
+                return "Acreditado";
+            default:
+                return status;
+        }
+    };
 
     const pendingCount = assets.filter((a) => a.status === "pending_review").length;
     const approvedCount = assets.filter((a) => a.status === "approved").length;
@@ -1010,22 +1314,17 @@ export default function CompanyDashboard() {
             )}
 
             {asset.status === "tokenized" && (
-                <button
-                    onClick={() => handleCreateEscrow(asset)}
-                    disabled={isProcessing === asset.id || !address}
-                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-lg font-bold text-sm hover:from-blue-500 hover:to-cyan-400 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                    {isProcessing === asset.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                        <Rocket className="w-4 h-4" />
-                    )}
-                    Crear Escrow
-                </button>
+                <span className="text-xs text-cyan-300 font-bold bg-cyan-500/10 px-3 py-2 rounded-lg border border-cyan-500/20 flex items-center gap-2">
+                    <Rocket className="w-4 h-4" />
+                    Listo para solicitud unificada
+                </span>
             )}
 
             {asset.status === "funding_requested" && (
                 <div className="flex flex-col gap-2">
+                    <span className="text-xs text-emerald-300 font-semibold">
+                        Monto préstamo: ${getLoanAmountForAsset(asset).toLocaleString()} USDC
+                    </span>
                     {/* 🎯 Indicador de estado del milestone */}
                     {(() => {
                         const contractId = asset.contractId || asset.contract_id;
@@ -1053,18 +1352,24 @@ export default function CompanyDashboard() {
                             );
                         }
                     })()}
-                    <button
-                        onClick={() => handleSendFunds(asset)}
-                        disabled={isProcessing === asset.id || !address}
-                        className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-lg font-bold text-sm hover:from-green-500 hover:to-emerald-400 transition-all shadow-lg shadow-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                        {isProcessing === asset.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                            <Check className="w-4 h-4" />
-                        )}
-                        Enviar Fondos
-                    </button>
+                    {isEscrowActionOwner(asset) ? (
+                        <button
+                            onClick={() => handleSendFunds(asset)}
+                            disabled={isProcessing === asset.id || !address}
+                            className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-lg font-bold text-sm hover:from-green-500 hover:to-emerald-400 transition-all shadow-lg shadow-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                            {isProcessing === asset.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <Check className="w-4 h-4" />
+                            )}
+                            Enviar Fondos
+                        </button>
+                    ) : (
+                        <span className="text-xs text-slate-400">
+                            Este escrow se gestiona desde otra garantía del mismo préstamo.
+                        </span>
+                    )}
                 </div>
             )}
 
@@ -1189,20 +1494,20 @@ export default function CompanyDashboard() {
                     </div>
                 </div>
 
-                {/* Assets Section */}
+                {/* SOLICITANTES UNIFICADOS */}
                 <div className="bg-slate-900/50 rounded-[2rem] border border-white/[0.05] overflow-hidden">
                     <div className="p-6 border-b border-white/[0.05]">
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                             <div>
                                 <h2 className="text-xl font-bold font-[family-name:var(--font-syne)] text-white">
-                                    Activos Registrados
+                                    Solicitantes
                                 </h2>
-                                <p className="text-slate-500 text-sm mt-1 font-[family-name:var(--font-manrope)]">
-                                    Gestión de garantías y tokenización
+                                <p className="text-slate-500 text-sm mt-1">
+                                    Garantías y préstamos en una sola vista por usuario
                                 </p>
                             </div>
-                            <div className="inline-flex items-center gap-2 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 px-3 py-1 text-xs font-semibold">
-                                <Coins className="w-4 h-4" /> NFTs emitidos: {tokenizedCount}
+                            <div className="inline-flex items-center gap-2 rounded-full bg-orange-500/10 text-orange-300 border border-orange-500/20 px-3 py-1 text-xs font-semibold">
+                                <Coins className="w-4 h-4" /> {loanRequests.filter((lr) => lr.status === "pending").length} pendientes
                             </div>
                         </div>
                     </div>
@@ -1210,130 +1515,197 @@ export default function CompanyDashboard() {
                     {loading ? (
                         <div className="p-12 text-center">
                             <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
-                            <p className="text-slate-400">Cargando activos...</p>
+                            <p className="text-slate-400">Cargando solicitantes...</p>
                         </div>
-                    ) : assets.length === 0 ? (
+                    ) : unifiedBorrowers.length === 0 ? (
                         <div className="p-12 text-center">
                             <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
                                 <FileText className="w-8 h-8 text-slate-600" />
                             </div>
-                            <p className="text-slate-400">No hay activos registrados</p>
+                            <p className="text-slate-400">No hay solicitantes para mostrar</p>
                         </div>
                     ) : (
-                        <>
-                            {/* Desktop Table View */}
-                            <div className="hidden md:block overflow-x-auto">
-                                <table className="w-full">
-                                    <thead className="bg-slate-950/50 text-slate-400 text-xs uppercase tracking-wider">
-                                        <tr>
-                                            <th className="px-6 py-4 text-left font-medium">Activo</th>
-                                            <th className="px-6 py-4 text-left font-medium">Titular</th>
-                                            <th className="px-6 py-4 text-left font-medium">Valor</th>
-                                            <th className="px-6 py-4 text-left font-medium">Estado</th>
-                                            <th className="px-6 py-4 text-left font-medium">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-white/[0.05]">
-                                        <AnimatePresence>
-                                            {assets.map((asset) => (
-                                                <motion.tr
-                                                    key={asset.id}
-                                                    initial={{ opacity: 0 }}
-                                                    animate={{ opacity: 1 }}
-                                                    className="hover:bg-white/[0.02] transition-colors group"
-                                                >
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-blue-400 border border-transparent group-hover:border-blue-500/30 transition-all">
-                                                                {getIcon(asset.type)}
-                                                            </div>
-                                                            <div>
-                                                                <p className="font-bold text-white text-sm">
-                                                                    {asset.name}
-                                                                </p>
-                                                                {(asset.status === "tokenized" ||
-                                                                    asset.status === "funding_requested" ||
-                                                                    asset.status === "funded") && (
-                                                                        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 text-[10px] font-semibold">
-                                                                            <Coins className="w-3 h-3" /> NFT emitido
-                                                                        </div>
-                                                                    )}
-                                                                <p className="text-[10px] text-slate-500 font-mono">
-                                                                    ID: {asset.id.slice(0, 8)}...
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <p className="text-white text-sm">{asset.owner}</p>
-                                                        <p className="text-[10px] text-slate-500 font-mono">
-                                                            {(asset.ownerWallet || asset.owner_wallet || "").slice(0, 6)}...
-                                                        </p>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <p className="text-white font-bold font-mono">
-                                                            ${asset.value.toLocaleString()}
-                                                        </p>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        {getStatusBadge(asset.status)}
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <AssetActions asset={asset} />
-                                                    </td>
-                                                </motion.tr>
-                                            ))}
-                                        </AnimatePresence>
-                                    </tbody>
-                                </table>
-                            </div>
+                        <div className="divide-y divide-white/[0.05]">
+                            {unifiedBorrowers.map((borrower) => (
+                                <div key={borrower.borrowerWallet} className="p-6 hover:bg-white/[0.01] transition-colors">
+                                    {/* Fila Principal del Usuario */}
+                                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
 
-                            {/* Mobile Card View */}
-                            <div className="md:hidden p-4 space-y-4">
-                                <AnimatePresence>
-                                    {assets.map((asset) => (
-                                        <motion.div
-                                            key={asset.id}
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            className="bg-slate-900 border border-white/[0.05] rounded-2xl p-5 shadow-lg relative overflow-hidden"
-                                        >
-                                            <div className="flex justify-between items-start mb-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-blue-400">
-                                                        {getIcon(asset.type)}
-                                                    </div>
-                                                    <div>
-                                                        <h3 className="font-bold text-white">{asset.name}</h3>
-                                                        {(asset.status === "tokenized" ||
-                                                            asset.status === "funding_requested" ||
-                                                            asset.status === "funded") && (
-                                                                <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 text-[10px] font-semibold">
-                                                                    <Coins className="w-3 h-3" /> NFT emitido
-                                                                </div>
-                                                            )}
-                                                        <p className="text-xs text-slate-500">{asset.owner}</p>
-                                                    </div>
+                                        {/* Izquierda: Info de usuario y resumen */}
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-4 mb-3">
+                                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg border border-white/10 uppercase">
+                                                    {borrower.borrowerName.substring(0, 2)}
                                                 </div>
-                                                <div className="text-right">
-                                                    <p className="text-lg font-bold text-white font-[family-name:var(--font-syne)]">
-                                                        ${asset.value.toLocaleString()}
+                                                <div>
+                                                    <h3 className="text-lg font-bold text-white leading-tight">
+                                                        {borrower.borrowerName}
+                                                    </h3>
+                                                    <p className="text-xs text-slate-500 font-mono">
+                                                        {borrower.borrowerWallet.slice(0, 8)}...{borrower.borrowerWallet.slice(-6)}
                                                     </p>
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center justify-between mb-4 border-t border-white/[0.05] pt-4">
-                                                {getStatusBadge(asset.status)}
+                                            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                                                <span className="flex items-center gap-1">
+                                                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                                                    {borrower.assets.length} Garantías
+                                                </span>
+                                                <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                                                <span className="flex items-center gap-1">
+                                                    <FileText className="w-4 h-4 text-orange-400" />
+                                                    {borrower.loans.length} Solicitudes
+                                                </span>
+                                                {borrower.pendingCount > 0 && (
+                                                    <>
+                                                        <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                                                        <span className="text-yellow-500 font-medium">
+                                                            {borrower.pendingCount} pendientes
+                                                        </span>
+                                                    </>
+                                                )}
                                             </div>
+                                        </div>
 
-                                            <div className="flex flex-wrap gap-2">
-                                                <AssetActions asset={asset} />
+                                        {/* Derecha: Montos y Call to action principal */}
+                                        <div className="md:text-right flex flex-col items-start md:items-end">
+                                            <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-1">
+                                                Total Solicitado
+                                            </p>
+                                            <div className="text-3xl font-bold font-[family-name:var(--font-syne)] text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
+                                                $ {borrower.totalRequested.toLocaleString()} <span className="text-lg opacity-60">USD</span>
                                             </div>
-                                        </motion.div>
-                                    ))}
-                                </AnimatePresence>
-                            </div>
-                        </>
+                                        </div>
+                                    </div>
+
+                                    {/* Detalles (Garantías y Préstamos) estilo sub-rows */}
+                                    {(borrower.assets.length > 0 || borrower.loans.length > 0) && (
+                                        <div className="mt-6 pl-4 md:pl-16 space-y-4">
+
+                                            {/* SECCIÓN PRESTAMOS */}
+                                            {borrower.loans.map((lr) => {
+                                                const lrAssets = assets.filter((a) => lr.asset_ids.includes(a.id));
+                                                // Definir visuales del estado
+                                                const isPending = lr.status === "pending";
+                                                const isFunded = lr.status === "funded";
+                                                const dotColor = isPending ? "bg-yellow-500" : isFunded ? "bg-emerald-500" : "bg-purple-500";
+                                                const statusText = isPending ? "En revisión / Pendiente" : lr.status === "approved" ? "Aprobado" : lr.status === "escrow_created" ? "Escrow Creado" : "Préstamo Acreditado";
+
+                                                return (
+                                                    <div key={lr.id} className="bg-slate-900/40 rounded-xl p-4 border border-white/[0.03] hover:border-white/[0.08] transition-colors relative overflow-hidden group">
+                                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-orange-500/50 to-amber-500/50 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+
+                                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pl-2">
+                                                            <div>
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="text-sm font-bold text-white flex items-center gap-2">
+                                                                        <Rocket className="w-4 h-4 text-orange-400" />
+                                                                        Préstamo por $ {lr.amount_requested.toLocaleString()} USD
+                                                                    </span>
+                                                                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-white/[0.05] bg-slate-950 text-[10px] font-semibold text-slate-300">
+                                                                        <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`}></span>
+                                                                        {statusText}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="text-xs text-slate-500 mt-2 flex gap-3">
+                                                                    <span>Colateral total: <strong className="text-slate-300">${lr.collateral_value.toLocaleString()}</strong></span>
+                                                                    <span>LTV: <strong className="text-slate-300">{(lr.ltv_ratio * 100).toFixed(0)}%</strong></span>
+                                                                </div>
+
+                                                                {/* Garantias tags */}
+                                                                {lrAssets.length > 0 && (
+                                                                    <div className="flex gap-2 mt-3 flex-wrap">
+                                                                        {lrAssets.map((a) => (
+                                                                            <span key={a.id} className="text-[10px] bg-slate-800 text-slate-400 px-2.5 py-1 rounded-lg border border-white/[0.05] flex items-center gap-1.5">
+                                                                                <ShieldCheck className="w-3 h-3 text-emerald-500/70" /> {a.name}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2 md:w-auto w-full">
+                                                                {lr.status === "pending" && (
+                                                                    <button
+                                                                        onClick={() => handleCreateEscrowFromLoanRequest(lr)}
+                                                                        disabled={isProcessing === lr.id}
+                                                                        className="flex-1 md:flex-none bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/20 px-4 py-2 rounded-xl font-bold text-xs transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                                                    >
+                                                                        {isProcessing === lr.id ? (
+                                                                            <><Loader2 className="w-4 h-4 animate-spin" /> Creando Escrow...</>
+                                                                        ) : (
+                                                                            <><Rocket className="w-4 h-4" /> Aprobar e ir a Fondeo</>
+                                                                        )}
+                                                                    </button>
+                                                                )}
+                                                                <button
+                                                                    onClick={() => handleDeleteLoanRequest(lr.id)}
+                                                                    disabled={isDeletingLoanRequestId === lr.id}
+                                                                    className="p-2 bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 rounded-xl text-red-400/70 hover:text-red-400 transition-colors"
+                                                                    title="Eliminar Solicitud"
+                                                                >
+                                                                    {isDeletingLoanRequestId === lr.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+
+                                            {/* SECCIÓN GARANTÍAS */}
+                                            {(() => {
+                                                const seenContracts = new Set<string>();
+                                                const assetsForDisplay = borrower.assets.filter((asset) => {
+                                                    const contractId = asset.contractId || asset.contract_id;
+                                                    const isUnifiedState =
+                                                        asset.status === "funding_requested" || asset.status === "funded";
+                                                    if (!isUnifiedState || !contractId) return true;
+                                                    if (seenContracts.has(contractId)) return false;
+                                                    seenContracts.add(contractId);
+                                                    return true;
+                                                });
+
+                                                return assetsForDisplay.map((asset) => {
+                                                // Mostrar acciones para las garantías
+                                                return (
+                                                    <div key={asset.id} className="bg-slate-900/40 rounded-xl p-4 border border-white/[0.03] hover:border-white/[0.08] transition-colors relative overflow-hidden group">
+                                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-500/50 to-cyan-500/50 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+
+                                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pl-2">
+                                                            <div>
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="text-sm font-bold text-slate-200">
+                                                                        Garantía: {asset.name}
+                                                                    </span>
+                                                                    <span className="text-xs text-slate-500 font-mono ml-2">ID: {asset.id.slice(0, 8)}...</span>
+                                                                </div>
+
+                                                                <div className="mt-2 flex items-center gap-2">
+                                                                    <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1.5 bg-slate-800/50 px-2 py-1 rounded-md">
+                                                                        <span className={`w-1.5 h-1.5 rounded-full ${asset.status === 'funded' ? 'bg-emerald-500' : 'bg-blue-500'}`}></span>
+                                                                        Estado: {getAssetStatusLabel(asset.status)}
+                                                                    </span>
+
+                                                                    <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1.5 bg-slate-800/50 px-2 py-1 rounded-md">
+                                                                        Valor Aprobado: <strong className="text-white">${getLoanAmountForAsset(asset).toLocaleString()}</strong>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="w-full md:w-auto">
+                                                                <AssetActions asset={asset} />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                                });
+                                            })()}
+
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
                     )}
                 </div>
             </main>
@@ -1576,10 +1948,10 @@ export default function CompanyDashboard() {
                                     modalResolverRef.current = null;
                                 }}
                                 className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all shadow-lg ${modalState.title.toLowerCase().includes('error')
-                                        ? 'bg-red-600 text-white hover:bg-red-500 shadow-red-500/20'
-                                        : modalState.title.toLowerCase().includes('éxito') || modalState.title.toLowerCase().includes('listo')
-                                            ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-500/20'
-                                            : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20'
+                                    ? 'bg-red-600 text-white hover:bg-red-500 shadow-red-500/20'
+                                    : modalState.title.toLowerCase().includes('éxito') || modalState.title.toLowerCase().includes('listo')
+                                        ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-500/20'
+                                        : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20'
                                     }`}
                             >
                                 {modalState.confirmLabel}
