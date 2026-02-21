@@ -50,6 +50,8 @@ export async function DELETE(
 ) {
     try {
         const { id } = await params;
+        const { searchParams } = new URL(request.url);
+        const forceDelete = searchParams.get("force") === "1";
 
         const { data: existing, error: fetchError } = await supabaseAdmin
             .from("loan_requests")
@@ -72,8 +74,9 @@ export async function DELETE(
             );
         }
 
-        // Para evitar inconsistencias, solo permitimos borrar solicitudes aún pendientes
-        if (existing.status !== "pending") {
+        // En modo normal, solo permitimos borrar solicitudes pendientes.
+        // En modo prueba/admin se puede forzar con ?force=1.
+        if (!forceDelete && existing.status !== "pending") {
             return NextResponse.json(
                 { error: "Solo se pueden borrar solicitudes en estado pending" },
                 { status: 400 }

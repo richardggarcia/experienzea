@@ -90,6 +90,7 @@ export default function CompanyDashboard() {
     const [docsReviewed, setDocsReviewed] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
+    const [isDeletingLoanRequestId, setIsDeletingLoanRequestId] = useState<string | null>(null);
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
 
     // 🎯 Estado de los milestones para mostrar indicador visual
@@ -457,6 +458,116 @@ export default function CompanyDashboard() {
         }
     };
 
+    const handleDeleteLoanRequest = async (loanId: string) => {
+        const confirmed = await requestConfirm(
+            "¿Eliminar esta solicitud de préstamo del panel? En modo prueba se borrará aunque ya esté en otro estado.",
+            "Eliminar solicitud"
+        );
+        if (!confirmed) return;
+
+        setIsDeletingLoanRequestId(loanId);
+        try {
+            const response = await fetch(`/api/loan-requests/${loanId}?force=1`, {
+                method: "DELETE",
+            });
+
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.error || "No se pudo eliminar la solicitud");
+            }
+
+            setLoanRequests((prev) => prev.filter((loan) => loan.id !== loanId));
+            showAlert("Solicitud eliminada.", "Listo");
+        } catch (error) {
+            console.error("Error deleting loan request:", error);
+            showAlert("No se pudo eliminar la solicitud.");
+        } finally {
+            setIsDeletingLoanRequestId(null);
+        }
+    };
+
+    const handleCreateEscrowFromLoanRequest = async (lr: LoanRequest) => {
+        if (!address) {
+            showAlert("Conecta la wallet primero");
+            return;
+        }
+
+        const borrowerWallet = lr.borrower_wallet;
+        if (!borrowerWallet) {
+            showAlert("No se encontró la wallet del solicitante");
+            return;
+        }
+
+        setIsProcessing(lr.id);
+        try {
+            const payload = {
+                signer: address,
+                engagementId: lr.id,
+                title: `Prestamo $${lr.amount_requested.toLocaleString()} - ${lr.borrower_name}`,
+                roles: {
+                    approver: address,
+                    serviceProvider: borrowerWallet,
+                    platformAddress: address,
+                    releaseSigner: address,
+                    disputeResolver: address,
+                    receiver: borrowerWallet,
+                },
+                description: `Prestamo de $${lr.amount_requested.toLocaleString()} respaldado por ${lr.asset_ids.length} garantia(s). Colateral total: $${lr.collateral_value.toLocaleString()}`,
+                amount: lr.amount_requested,
+                platformFee: 0,
+                milestones: [{ description: `Desembolso prestamo $${lr.amount_requested.toLocaleString()}` }],
+                trustline: {
+                    symbol: usdcSymbol,
+                    address: usdcIssuer,
+                },
+            };
+
+            const response = await deployEscrow(payload, "single-release");
+            if (response?.status === "FAILED") throw new Error("deployEscrow FAILED");
+            if (!response?.unsignedTransaction) throw new Error("No unsigned transaction");
+
+            const sendResponse = await signAndSendXdr(response.unsignedTransaction);
+            if (!sendResponse || sendResponse.status !== "SUCCESS") throw new Error("Send failed");
+
+            const contractId = (response as any).contractId || await waitForEscrowContractId(address, lr.id);
+            console.log("📝 Contract ID obtenido:", contractId);
+
+            const lrPatchBody: any = { status: "escrow_created" };
+            if (contractId) lrPatchBody.contract_id = contractId;
+            await fetch(`/api/loan-requests/${lr.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(lrPatchBody),
+            });
+
+            for (const assetId of lr.asset_ids) {
+                try {
+                    const assetPatchBody: any = { status: "funding_requested" };
+                    if (contractId) assetPatchBody.contract_id = contractId;
+                    const patchRes = await fetch(`/api/assets/${assetId}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(assetPatchBody),
+                    });
+                    if (!patchRes.ok) {
+                        console.error(`⚠️ Error actualizando asset ${assetId}:`, await patchRes.text());
+                    }
+                } catch (patchErr) {
+                    console.error(`⚠️ Error PATCH asset ${assetId}:`, patchErr);
+                }
+            }
+
+            await fetchAssets();
+            await fetchLoanRequests();
+            showAlert("Escrow creado exitosamente", "Éxito");
+        } catch (err) {
+            console.error(err);
+            showAlert("Error creando el escrow. Revisa la consola.");
+        } finally {
+            setIsProcessing(null);
+        }
+    };
+
     // Redirect si no está autenticado
     useEffect(() => {
         if (status === "unauthenticated") {
@@ -493,6 +604,54 @@ export default function CompanyDashboard() {
     const visibleAssets = useMemo(() => {
         return filterVisibleEscrowLeaderAssets(assets, escrowActionOwnerByAssetId);
     }, [assets, escrowActionOwnerByAssetId]);
+    const unifiedBorrowers = useMemo(() => {
+        type BorrowerView = {
+            borrowerWallet: string;
+            borrowerName: string;
+            assets: Asset[];
+            loans: LoanRequest[];
+            pendingCount: number;
+            totalRequested: number;
+        };
+
+        const grouped = new Map<string, BorrowerView>();
+
+        assets.forEach((asset) => {
+            const wallet = asset.ownerWallet || asset.owner_wallet || "sin-wallet";
+            const current = grouped.get(wallet) || {
+                borrowerWallet: wallet,
+                borrowerName: asset.owner || "Sin nombre",
+                assets: [],
+                loans: [],
+                pendingCount: 0,
+                totalRequested: 0,
+            };
+            current.assets.push(asset);
+            grouped.set(wallet, current);
+        });
+
+        loanRequests.forEach((loan) => {
+            const wallet = loan.borrower_wallet || "sin-wallet";
+            const current = grouped.get(wallet) || {
+                borrowerWallet: wallet,
+                borrowerName: loan.borrower_name || "Sin nombre",
+                assets: [],
+                loans: [],
+                pendingCount: 0,
+                totalRequested: 0,
+            };
+            current.borrowerName = loan.borrower_name || current.borrowerName;
+            current.loans.push(loan);
+            current.pendingCount += loan.status === "pending" ? 1 : 0;
+            current.totalRequested += loan.amount_requested || 0;
+            grouped.set(wallet, current);
+        });
+
+        return Array.from(grouped.values()).sort((a, b) => {
+            if (b.pendingCount !== a.pendingCount) return b.pendingCount - a.pendingCount;
+            return b.totalRequested - a.totalRequested;
+        });
+    }, [assets, loanRequests]);
 
     if (status === "loading") {
         return (
@@ -1087,6 +1246,22 @@ export default function CompanyDashboard() {
                 );
         }
     };
+    const getAssetStatusLabel = (status: Asset["status"]) => {
+        switch (status) {
+            case "pending_review":
+                return "En revisión";
+            case "approved":
+                return "Aprobado";
+            case "tokenized":
+                return "Tokenizado";
+            case "funding_requested":
+                return "Escrow creado";
+            case "funded":
+                return "Acreditado";
+            default:
+                return status;
+        }
+    };
 
     const pendingCount = assets.filter((a) => a.status === "pending_review").length;
     const approvedCount = assets.filter((a) => a.status === "approved").length;
@@ -1308,20 +1483,20 @@ export default function CompanyDashboard() {
                     </div>
                 </div>
 
-                {/* Assets Section */}
+                {/* SOLICITANTES UNIFICADOS */}
                 <div className="bg-slate-900/50 rounded-[2rem] border border-white/[0.05] overflow-hidden">
                     <div className="p-6 border-b border-white/[0.05]">
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                             <div>
                                 <h2 className="text-xl font-bold font-[family-name:var(--font-syne)] text-white">
-                                    Activos Registrados
+                                    Solicitantes
                                 </h2>
-                                <p className="text-slate-500 text-sm mt-1 font-[family-name:var(--font-manrope)]">
-                                    Gestión de garantías y tokenización
+                                <p className="text-slate-500 text-sm mt-1">
+                                    Garantías y préstamos en una sola vista por usuario
                                 </p>
                             </div>
-                            <div className="inline-flex items-center gap-2 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 px-3 py-1 text-xs font-semibold">
-                                <Coins className="w-4 h-4" /> NFTs emitidos: {tokenizedCount}
+                            <div className="inline-flex items-center gap-2 rounded-full bg-orange-500/10 text-orange-300 border border-orange-500/20 px-3 py-1 text-xs font-semibold">
+                                <Coins className="w-4 h-4" /> {loanRequests.filter((lr) => lr.status === "pending").length} pendientes
                             </div>
                         </div>
                     </div>
@@ -1329,322 +1504,162 @@ export default function CompanyDashboard() {
                     {loading ? (
                         <div className="p-12 text-center">
                             <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
-                            <p className="text-slate-400">Cargando activos...</p>
+                            <p className="text-slate-400">Cargando solicitantes...</p>
                         </div>
-                    ) : assets.length === 0 ? (
+                    ) : unifiedBorrowers.length === 0 ? (
                         <div className="p-12 text-center">
                             <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
                                 <FileText className="w-8 h-8 text-slate-600" />
                             </div>
-                            <p className="text-slate-400">No hay activos registrados</p>
+                            <p className="text-slate-400">No hay solicitantes para mostrar</p>
                         </div>
                     ) : (
-                        <>
-                            {/* Desktop Table View */}
-                            <div className="hidden md:block overflow-x-auto">
-                                <table className="w-full">
-                                    <thead className="bg-slate-950/50 text-slate-400 text-xs uppercase tracking-wider">
-                                        <tr>
-                                            <th className="px-6 py-4 text-left font-medium">Activo</th>
-                                            <th className="px-6 py-4 text-left font-medium">Titular</th>
-                                            <th className="px-6 py-4 text-left font-medium">Valor</th>
-                                            <th className="px-6 py-4 text-left font-medium">Estado</th>
-                                            <th className="px-6 py-4 text-left font-medium">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-white/[0.05]">
-                                        <AnimatePresence>
-                                            {visibleAssets.map((asset) => (
-                                                <motion.tr
-                                                    key={asset.id}
-                                                    initial={{ opacity: 0 }}
-                                                    animate={{ opacity: 1 }}
-                                                    className="hover:bg-white/[0.02] transition-colors group"
-                                                >
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-blue-400 border border-transparent group-hover:border-blue-500/30 transition-all">
-                                                                {getIcon(asset.type)}
-                                                            </div>
-                                                            <div>
-                                                                <p className="font-bold text-white text-sm">
-                                                                    {asset.name}
-                                                                </p>
-                                                                {(asset.status === "tokenized" ||
-                                                                    asset.status === "funding_requested" ||
-                                                                    asset.status === "funded") && (
-                                                                        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 text-[10px] font-semibold">
-                                                                            <Coins className="w-3 h-3" /> NFT emitido
-                                                                        </div>
-                                                                    )}
-                                                                <p className="text-[10px] text-slate-500 font-mono">
-                                                                    ID: {asset.id.slice(0, 8)}...
-                                                                </p>
-                                                                {(escrowGroupedAssetsByLeaderId.get(asset.id)?.length || 0) > 1 && (
-                                                                    <p className="text-[10px] text-cyan-400 font-semibold">
-                                                                        Préstamo unificado: {escrowGroupedAssetsByLeaderId.get(asset.id)?.length} garantías
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <p className="text-white text-sm">{asset.owner}</p>
-                                                        <p className="text-[10px] text-slate-500 font-mono">
-                                                            {(asset.ownerWallet || asset.owner_wallet || "").slice(0, 6)}...
-                                                        </p>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <p className="text-white font-bold font-mono">
-                                                            $
-                                                            {(asset.status === "funding_requested" || asset.status === "funded"
-                                                                ? getLoanAmountForAsset(asset)
-                                                                : asset.value
-                                                            ).toLocaleString()}
-                                                        </p>
-                                                        {(asset.status === "funding_requested" || asset.status === "funded") && (
-                                                            <p className="text-[10px] text-slate-500">Monto préstamo</p>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        {getStatusBadge(asset.status)}
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <AssetActions asset={asset} />
-                                                    </td>
-                                                </motion.tr>
-                                            ))}
-                                        </AnimatePresence>
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            {/* Mobile Card View */}
-                            <div className="md:hidden p-4 space-y-4">
-                                <AnimatePresence>
-                                    {visibleAssets.map((asset) => (
-                                        <motion.div
-                                            key={asset.id}
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            className="bg-slate-900 border border-white/[0.05] rounded-2xl p-5 shadow-lg relative overflow-hidden"
-                                        >
-                                            <div className="flex justify-between items-start mb-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-blue-400">
-                                                        {getIcon(asset.type)}
-                                                    </div>
-                                                    <div>
-                                                        <h3 className="font-bold text-white">{asset.name}</h3>
-                                                    {(asset.status === "tokenized" ||
-                                                        asset.status === "funding_requested" ||
-                                                        asset.status === "funded") && (
-                                                        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 text-[10px] font-semibold">
-                                                            <Coins className="w-3 h-3" /> NFT emitido
-                                                        </div>
-                                                    )}
-                                                    {(escrowGroupedAssetsByLeaderId.get(asset.id)?.length || 0) > 1 && (
-                                                        <p className="text-[10px] text-cyan-400 font-semibold mt-1">
-                                                            Préstamo unificado: {escrowGroupedAssetsByLeaderId.get(asset.id)?.length} garantías
-                                                        </p>
-                                                    )}
-                                                    <p className="text-xs text-slate-500">{asset.owner}</p>
-                                                </div>
-                                            </div>
-                                                <div className="text-right">
-                                                    <p className="text-lg font-bold text-white font-[family-name:var(--font-syne)]">
-                                                        $
-                                                        {(asset.status === "funding_requested" || asset.status === "funded"
-                                                            ? getLoanAmountForAsset(asset)
-                                                            : asset.value
-                                                        ).toLocaleString()}
-                                                    </p>
-                                                    {(asset.status === "funding_requested" || asset.status === "funded") && (
-                                                        <p className="text-[10px] text-slate-500">Monto préstamo</p>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            <div className="flex items-center justify-between mb-4 border-t border-white/[0.05] pt-4">
-                                                {getStatusBadge(asset.status)}
-                                            </div>
-
-                                            <div className="flex flex-wrap gap-2">
-                                                <AssetActions asset={asset} />
-                                            </div>
-                                        </motion.div>
-                                    ))}
-                                </AnimatePresence>
-                            </div>
-                        </>
-                    )}
-                </div>
-
-                {/* LOAN REQUESTS SECTION */}
-                {loanRequests.length > 0 && (
-                    <div className="bg-slate-900/50 rounded-[2rem] border border-white/[0.05] overflow-hidden mt-8">
-                        <div className="p-6 border-b border-white/[0.05]">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <h2 className="text-xl font-bold font-[family-name:var(--font-syne)] text-white flex items-center gap-2">
-                                        <Rocket className="w-5 h-5 text-orange-500" />
-                                        Solicitudes de Préstamo
-                                    </h2>
-                                    <p className="text-slate-500 text-sm mt-1">Solicitudes de liquidez enviadas por los solicitantes</p>
-                                </div>
-                                <div className="inline-flex items-center gap-2 rounded-full bg-orange-500/10 text-orange-300 border border-orange-500/20 px-3 py-1 text-xs font-semibold">
-                                    <Coins className="w-4 h-4" /> {loanRequests.filter(lr => lr.status === 'pending').length} pendientes
-                                </div>
-                            </div>
-                        </div>
                         <div className="divide-y divide-white/[0.05]">
-                            {loanRequests.map(lr => {
-                                const lrAssets = assets.filter(a => lr.asset_ids.includes(a.id));
-                                return (
-                                    <div key={lr.id} className="p-6 hover:bg-white/[0.02] transition-colors">
-                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-3 mb-2">
-                                                    <p className="text-2xl font-bold text-orange-400 font-[family-name:var(--font-syne)]">
-                                                        ${lr.amount_requested.toLocaleString()}
-                                                    </p>
-                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${lr.status === 'pending'
-                                                        ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
-                                                        : lr.status === 'approved'
-                                                            ? 'bg-blue-500/10 text-blue-500 border-blue-500/20'
-                                                            : lr.status === 'escrow_created'
-                                                                ? 'bg-purple-500/10 text-purple-500 border-purple-500/20'
-                                                                : 'bg-green-500/10 text-green-500 border-green-500/20'
-                                                        }`}>
-                                                        {lr.status === 'pending' ? 'PENDIENTE' : lr.status === 'approved' ? 'APROBADO' : lr.status === 'escrow_created' ? 'ESCROW CREADO' : 'FONDADO'}
-                                                    </span>
+                            {unifiedBorrowers.map((borrower) => (
+                                <div key={borrower.borrowerWallet} className="p-6">
+                                    <div className="mb-4">
+                                        <p className="text-base font-bold text-white">
+                                            {borrower.borrowerName}
+                                            <span className="ml-2 text-xs text-slate-500 font-mono">
+                                                {borrower.borrowerWallet.slice(0, 8)}...
+                                            </span>
+                                        </p>
+                                        <p className="text-xs text-slate-500 mt-1">
+                                            Garantías: <strong className="text-slate-300">{borrower.assets.length}</strong> ·
+                                            Solicitudes: <strong className="text-slate-300">{borrower.loans.length}</strong> ·
+                                            Pendientes: <strong className="text-yellow-400">{borrower.pendingCount}</strong> ·
+                                            Total solicitado: <strong className="text-orange-300">${borrower.totalRequested.toLocaleString()}</strong>
+                                        </p>
+                                    </div>
+
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        <div className="bg-[#0b1021] border border-white/[0.05] rounded-xl p-4">
+                                            <p className="text-xs uppercase tracking-wider text-slate-300 font-semibold mb-3">
+                                                Garantías
+                                            </p>
+                                            {borrower.assets.length === 0 ? (
+                                                <p className="text-xs text-slate-500">Sin garantías.</p>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    {borrower.assets.map((asset) => (
+                                                        <div key={asset.id} className="border border-white/[0.05] rounded-lg p-3">
+                                                            <div className="flex items-center justify-between gap-3">
+                                                                <div>
+                                                                    <p className="text-sm font-semibold text-white">{asset.name}</p>
+                                                                    <p className="text-[10px] text-slate-500 font-mono">ID: {asset.id.slice(0, 8)}...</p>
+                                                                </div>
+                                                                <p className="text-sm font-bold text-white">
+                                                                    $
+                                                                    {(asset.status === "funding_requested" || asset.status === "funded"
+                                                                        ? getLoanAmountForAsset(asset)
+                                                                        : asset.value
+                                                                    ).toLocaleString()}
+                                                                </p>
+                                                            </div>
+                                                            <div className="mt-2 flex items-center justify-between gap-2">
+                                                                <span className="text-[10px] text-slate-400 uppercase tracking-wider">
+                                                                    Estado: {getAssetStatusLabel(asset.status)}
+                                                                </span>
+                                                            </div>
+                                                            <div className="mt-2">
+                                                                <AssetActions asset={asset} />
+                                                            </div>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                                <p className="text-sm text-slate-400">
-                                                    <span className="text-slate-500">Solicitante:</span> {lr.borrower_name}
-                                                    <span className="text-slate-600 ml-2 font-mono text-xs">{lr.borrower_wallet?.slice(0, 8)}...</span>
-                                                </p>
-                                                <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
-                                                    <span>Colateral: <strong className="text-slate-300">${lr.collateral_value.toLocaleString()}</strong></span>
-                                                    <span>LTV: <strong className="text-slate-300">{(lr.ltv_ratio * 100).toFixed(0)}%</strong></span>
-                                                    <span>Garantías: <strong className="text-slate-300">{lr.asset_ids.length}</strong></span>
+                                            )}
+                                        </div>
+
+                                        <div className="bg-[#0b1021] border border-white/[0.05] rounded-xl p-4">
+                                            <p className="text-xs uppercase tracking-wider text-slate-300 font-semibold mb-3">
+                                                Préstamos
+                                            </p>
+                                            {borrower.loans.length === 0 ? (
+                                                <p className="text-xs text-slate-500">Sin solicitudes de préstamo.</p>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    {borrower.loans.map((lr) => {
+                                                        const lrAssets = assets.filter((a) => lr.asset_ids.includes(a.id));
+                                                        const loanStatusClass =
+                                                            lr.status === "pending"
+                                                                ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
+                                                                : lr.status === "approved"
+                                                                    ? "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                                                                    : lr.status === "escrow_created"
+                                                                        ? "bg-purple-500/10 text-purple-500 border-purple-500/20"
+                                                                        : "bg-green-500/10 text-green-500 border-green-500/20";
+                                                        const loanStatusLabel =
+                                                            lr.status === "pending"
+                                                                ? "PENDIENTE"
+                                                                : lr.status === "approved"
+                                                                    ? "APROBADO"
+                                                                    : lr.status === "escrow_created"
+                                                                        ? "ESCROW CREADO"
+                                                                        : "ACREDITADO";
+
+                                                        return (
+                                                            <div key={lr.id} className="border border-white/[0.05] rounded-lg p-3">
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <p className="text-sm font-bold text-orange-300">
+                                                                        ${lr.amount_requested.toLocaleString()}
+                                                                    </p>
+                                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${loanStatusClass}`}>
+                                                                        {loanStatusLabel}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="mt-2 text-xs text-slate-500">
+                                                                    Colateral: <strong className="text-slate-300">${lr.collateral_value.toLocaleString()}</strong> ·
+                                                                    LTV: <strong className="text-slate-300">{(lr.ltv_ratio * 100).toFixed(0)}%</strong> ·
+                                                                    Garantías: <strong className="text-slate-300">{lr.asset_ids.length}</strong>
+                                                                </div>
+                                                                {lrAssets.length > 0 && (
+                                                                    <div className="flex gap-2 mt-2 flex-wrap">
+                                                                        {lrAssets.map((a) => (
+                                                                            <span key={a.id} className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded-lg border border-white/[0.05]">
+                                                                                {a.name} • ${a.value.toLocaleString()}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                                <div className="mt-3 flex items-center gap-2">
+                                                                    {lr.status === "pending" && (
+                                                                        <button
+                                                                            onClick={() => handleCreateEscrowFromLoanRequest(lr)}
+                                                                            disabled={isProcessing === lr.id}
+                                                                            className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-3 py-2 rounded-lg font-bold text-xs hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50"
+                                                                        >
+                                                                            {isProcessing === lr.id ? (
+                                                                                <><Loader2 className="w-4 h-4 animate-spin" /> Procesando...</>
+                                                                            ) : (
+                                                                                <><Rocket className="w-4 h-4" /> Crear Escrow</>
+                                                                            )}
+                                                                        </button>
+                                                                    )}
+                                                                    <button
+                                                                        onClick={() => handleDeleteLoanRequest(lr.id)}
+                                                                        disabled={isDeletingLoanRequestId === lr.id}
+                                                                        className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 px-3 py-2 rounded-lg font-bold text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                                                    >
+                                                                        {isDeletingLoanRequestId === lr.id ? (
+                                                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                                                        ) : (
+                                                                            <Trash2 className="w-4 h-4" />
+                                                                        )}
+                                                                        Borrar
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
-                                                {lrAssets.length > 0 && (
-                                                    <div className="flex gap-2 mt-3 flex-wrap">
-                                                        {lrAssets.map(a => (
-                                                            <span key={a.id} className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded-lg border border-white/[0.05]">
-                                                                {a.name} • ${a.value.toLocaleString()}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                {lr.status === 'pending' && (
-                                                    <button
-                                                        onClick={async () => {
-                                                            if (!address) {
-                                                                showAlert('Conecta la wallet primero');
-                                                                return;
-                                                            }
-                                                            const borrowerWallet = lr.borrower_wallet;
-                                                            if (!borrowerWallet) {
-                                                                showAlert('No se encontró la wallet del solicitante');
-                                                                return;
-                                                            }
-                                                            setIsProcessing(lr.id);
-                                                            try {
-                                                                const payload = {
-                                                                    signer: address,
-                                                                    engagementId: lr.id,
-                                                                    title: `Prestamo $${lr.amount_requested.toLocaleString()} - ${lr.borrower_name}`,
-                                                                    roles: {
-                                                                        approver: address,
-                                                                        serviceProvider: borrowerWallet,
-                                                                        platformAddress: address,
-                                                                        releaseSigner: address,
-                                                                        disputeResolver: address,
-                                                                        receiver: borrowerWallet,
-                                                                    },
-                                                                    description: `Prestamo de $${lr.amount_requested.toLocaleString()} respaldado por ${lr.asset_ids.length} garantia(s). Colateral total: $${lr.collateral_value.toLocaleString()}`,
-                                                                    amount: lr.amount_requested,
-                                                                    platformFee: 0,
-                                                                    milestones: [{ description: `Desembolso prestamo $${lr.amount_requested.toLocaleString()}` }],
-                                                                    trustline: {
-                                                                        symbol: usdcSymbol,
-                                                                        address: usdcIssuer,
-                                                                    },
-                                                                };
-
-                                                                const response = await deployEscrow(payload, 'single-release');
-                                                                if (response?.status === 'FAILED') throw new Error('deployEscrow FAILED');
-                                                                if (!response?.unsignedTransaction) throw new Error('No unsigned transaction');
-
-                                                                const sendResponse = await signAndSendXdr(response.unsignedTransaction);
-                                                                if (!sendResponse || sendResponse.status !== 'SUCCESS') throw new Error('Send failed');
-
-                                                                const contractId = (response as any).contractId || await waitForEscrowContractId(address, lr.id);
-                                                                console.log('📝 Contract ID obtenido:', contractId);
-
-                                                                // Actualizar loan request
-                                                                const lrPatchBody: any = { status: 'escrow_created' };
-                                                                if (contractId) lrPatchBody.contract_id = contractId;
-                                                                await fetch(`/api/loan-requests/${lr.id}`, {
-                                                                    method: 'PATCH',
-                                                                    headers: { 'Content-Type': 'application/json' },
-                                                                    body: JSON.stringify(lrPatchBody),
-                                                                });
-
-                                                                // Actualizar assets a funding_requested
-                                                                for (const assetId of lr.asset_ids) {
-                                                                    try {
-                                                                        const assetPatchBody: any = { status: 'funding_requested' };
-                                                                        if (contractId) assetPatchBody.contract_id = contractId;
-                                                                        const patchRes = await fetch(`/api/assets/${assetId}`, {
-                                                                            method: 'PATCH',
-                                                                            headers: { 'Content-Type': 'application/json' },
-                                                                            body: JSON.stringify(assetPatchBody),
-                                                                        });
-                                                                        if (!patchRes.ok) {
-                                                                            console.error(`⚠️ Error actualizando asset ${assetId}:`, await patchRes.text());
-                                                                        }
-                                                                    } catch (patchErr) {
-                                                                        console.error(`⚠️ Error PATCH asset ${assetId}:`, patchErr);
-                                                                    }
-                                                                }
-
-                                                                await fetchAssets();
-                                                                await fetchLoanRequests();
-                                                                showAlert('Escrow creado exitosamente', 'Éxito');
-                                                            } catch (err) {
-                                                                console.error(err);
-                                                                showAlert('Error creando el escrow. Revisa la consola.');
-                                                            } finally {
-                                                                setIsProcessing(null);
-                                                            }
-                                                        }}
-                                                        disabled={isProcessing === lr.id}
-                                                        className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50 shadow-[0_0_15px_rgba(249,115,22,0.3)]"
-                                                    >
-                                                        {isProcessing === lr.id ? (
-                                                            <><Loader2 className="w-4 h-4 animate-spin" /> Procesando...</>
-                                                        ) : (
-                                                            <><Rocket className="w-4 h-4" /> Crear Escrow Unificado</>
-                                                        )}
-                                                    </button>
-                                                )}
-                                                {lr.status === 'escrow_created' && (
-                                                    <span className="text-xs text-purple-400 font-bold flex items-center gap-1">
-                                                        <CheckCircle2 className="w-4 h-4" /> Escrow listo
-                                                    </span>
-                                                )}
-                                            </div>
+                                            )}
                                         </div>
                                     </div>
-                                );
-                            })}
+                                </div>
+                            ))}
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </main>
 
             {/* Modal para ver documentos */}
