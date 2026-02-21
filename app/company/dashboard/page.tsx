@@ -38,6 +38,11 @@ import {
     Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+    buildEscrowActionOwnerMap,
+    buildEscrowGroupsByLeaderId,
+    filterVisibleEscrowLeaderAssets,
+} from "@/lib/escrowGrouping";
 
 // Asset Type desde Supabase
 interface Asset {
@@ -102,34 +107,28 @@ export default function CompanyDashboard() {
         hideCancel: false,
     });
     const modalResolverRef = useRef<((value: boolean) => void) | null>(null);
-    const escrowActionOwnerByAssetId = useMemo(() => {
-        const map = new Map<string, boolean>();
-        const grouped = new Map<string, Asset[]>();
-
-        assets.forEach((asset) => {
-            const contractId = asset.contractId || asset.contract_id;
-            if (!contractId) return;
-            if (asset.status !== "funding_requested" && asset.status !== "funded") return;
-            const list = grouped.get(contractId) || [];
-            list.push(asset);
-            grouped.set(contractId, list);
+    const escrowActionOwnerByAssetId = useMemo(
+        () => buildEscrowActionOwnerMap(assets),
+        [assets]
+    );
+    const loanRequestByContractId = useMemo(() => {
+        const map = new Map<string, LoanRequest>();
+        loanRequests.forEach((loan) => {
+            if (loan.contract_id) {
+                map.set(loan.contract_id, loan);
+            }
         });
-
-        grouped.forEach((group) => {
-            const sorted = [...group].sort((a, b) => {
-                const aDate = a.created_at || "";
-                const bDate = b.created_at || "";
-                if (aDate !== bDate) return aDate.localeCompare(bDate);
-                return a.id.localeCompare(b.id);
-            });
-            const leaderId = sorted[0]?.id;
-            group.forEach((asset) => {
-                map.set(asset.id, asset.id === leaderId);
-            });
-        });
-
         return map;
-    }, [assets]);
+    }, [loanRequests]);
+    const loanAmountByAssetId = useMemo(() => {
+        const map = new Map<string, number>();
+        loanRequests.forEach((loan) => {
+            loan.asset_ids.forEach((assetId) => {
+                map.set(assetId, loan.amount_requested);
+            });
+        });
+        return map;
+    }, [loanRequests]);
 
     const { deployEscrow } = useInitializeEscrow();
     const { fundEscrow } = useFundEscrow();
@@ -157,18 +156,35 @@ export default function CompanyDashboard() {
                 if (escrow?.status === "completed" || escrow?.status === "released") {
                     console.log("✅ El escrow ya está liberado. Actualizando BD...");
 
-                    // Actualizar la base de datos automáticamente
-                    const response = await fetch(`/api/assets/${asset.id}`, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ status: "funded" }),
+                    const relatedAssets = assets.filter((item) => {
+                        const itemContractId = item.contractId || item.contract_id;
+                        return itemContractId === contractId;
                     });
+                    const assetsToPatch = relatedAssets.length > 0 ? relatedAssets : [asset];
 
-                    if (response.ok) {
-                        await fetchAssets();
-                        showAlert("Los fondos ya fueron liberados anteriormente. El estado se ha actualizado.", "Escrow ya liberado");
-                        return true;
+                    await Promise.all(
+                        assetsToPatch.map(async (item) => {
+                            await fetch(`/api/assets/${item.id}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ status: "funded" }),
+                            });
+                        })
+                    );
+
+                    const linkedLoan = loanRequestByContractId.get(contractId);
+                    if (linkedLoan) {
+                        await fetch(`/api/loan-requests/${linkedLoan.id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ status: "funded" }),
+                        });
                     }
+
+                    await fetchAssets();
+                    await fetchLoanRequests();
+                    showAlert("Los fondos ya fueron liberados anteriormente. El estado se ha actualizado.", "Escrow ya liberado");
+                    return true;
                 }
             }
             return false;
@@ -460,41 +476,22 @@ export default function CompanyDashboard() {
         if (!contractId) return true;
         return escrowActionOwnerByAssetId.get(asset.id) ?? true;
     };
-    const escrowGroupedAssetsByLeaderId = useMemo(() => {
-        const groupedByContract = new Map<string, Asset[]>();
-        const leaderToGroup = new Map<string, Asset[]>();
-
-        assets.forEach((asset) => {
-            const contractId = asset.contractId || asset.contract_id;
-            if (!contractId) return;
-            if (asset.status !== "funding_requested" && asset.status !== "funded") return;
-            const list = groupedByContract.get(contractId) || [];
-            list.push(asset);
-            groupedByContract.set(contractId, list);
-        });
-
-        groupedByContract.forEach((group) => {
-            const sorted = [...group].sort((a, b) => {
-                const aDate = a.created_at || "";
-                const bDate = b.created_at || "";
-                if (aDate !== bDate) return aDate.localeCompare(bDate);
-                return a.id.localeCompare(b.id);
-            });
-            const leaderId = sorted[0]?.id;
-            if (leaderId) {
-                leaderToGroup.set(leaderId, sorted);
+    const getLoanAmountForAsset = (asset: Asset) => {
+        const contractId = asset.contractId || asset.contract_id;
+        if (contractId) {
+            const contractLoan = loanRequestByContractId.get(contractId);
+            if (contractLoan?.amount_requested) {
+                return contractLoan.amount_requested;
             }
-        });
-
-        return leaderToGroup;
-    }, [assets]);
+        }
+        return loanAmountByAssetId.get(asset.id) ?? asset.value;
+    };
+    const escrowGroupedAssetsByLeaderId = useMemo(
+        () => buildEscrowGroupsByLeaderId(assets),
+        [assets]
+    );
     const visibleAssets = useMemo(() => {
-        return assets.filter((asset) => {
-            if (asset.status !== "funding_requested" && asset.status !== "funded") return true;
-            const contractId = asset.contractId || asset.contract_id;
-            if (!contractId) return true;
-            return isEscrowActionOwner(asset);
-        });
+        return filterVisibleEscrowLeaderAssets(assets, escrowActionOwnerByAssetId);
     }, [assets, escrowActionOwnerByAssetId]);
 
     if (status === "loading") {
@@ -847,11 +844,12 @@ export default function CompanyDashboard() {
 
             const balances = await getMultipleBalances({ addresses: [contractId] });
             const currentBalance = balances?.[0]?.balance || 0;
+            const loanAmount = getLoanAmountForAsset(asset);
 
             const confirmMessage =
                 currentBalance > 0
-                    ? "El escrow ya está fondeado. Se aprobará el milestone y se liberarán los fondos."
-                    : "¿Confirmás el envío de fondos al solicitante? Esta acción fondea y libera USDC.";
+                    ? `El escrow ya está fondeado. Se aprobará el milestone y se liberarán ${loanAmount} USDC.`
+                    : `¿Confirmás el envío de ${loanAmount} USDC al solicitante? Esta acción fondea y libera USDC.`;
 
             const confirmed = await requestConfirm(confirmMessage);
             if (!confirmed) return;
@@ -872,7 +870,7 @@ export default function CompanyDashboard() {
             if (currentBalance <= 0) {
                 const fundResponse = await fundEscrow(
                     {
-                        amount: asset.value,
+                        amount: loanAmount,
                         contractId,
                         signer: address,
                     },
@@ -991,17 +989,34 @@ export default function CompanyDashboard() {
                 throw new Error("No se pudieron liberar los fondos");
             }
 
-            const response = await fetch(`/api/assets/${asset.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    status: "funded",
-                }),
+            const relatedAssets = assets.filter((item) => {
+                const itemContractId = item.contractId || item.contract_id;
+                return itemContractId === contractId;
             });
-            if (response.ok) {
-                await fetchAssets();
-                showAlert("✅ Fondos enviados correctamente al solicitante", "Listo");
+            const assetsToPatch = relatedAssets.length > 0 ? relatedAssets : [asset];
+
+            await Promise.all(
+                assetsToPatch.map(async (item) => {
+                    await fetch(`/api/assets/${item.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ status: "funded" }),
+                    });
+                })
+            );
+
+            const linkedLoan = loanRequestByContractId.get(contractId);
+            if (linkedLoan) {
+                await fetch(`/api/loan-requests/${linkedLoan.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ status: "funded" }),
+                });
             }
+
+            await fetchAssets();
+            await fetchLoanRequests();
+            showAlert("✅ Fondos enviados correctamente al solicitante", "Listo");
         } catch (error) {
             const MAX_RETRIES = 3;
 
@@ -1121,6 +1136,9 @@ export default function CompanyDashboard() {
 
             {asset.status === "funding_requested" && (
                 <div className="flex flex-col gap-2">
+                    <span className="text-xs text-emerald-300 font-semibold">
+                        Monto préstamo: ${getLoanAmountForAsset(asset).toLocaleString()} USDC
+                    </span>
                     {/* 🎯 Indicador de estado del milestone */}
                     {(() => {
                         const contractId = asset.contractId || asset.contract_id;

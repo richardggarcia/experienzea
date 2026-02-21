@@ -13,6 +13,10 @@ import { Rocket, LogOut, Loader2, ArrowLeft, Plus, CheckCircle2, ShieldCheck, Tr
 import FileUpload from "@/components/FileUpload";
 import KYCModal from "@/components/KYCModal";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+    buildEscrowActionOwnerMap,
+    buildEscrowGroupsByLeaderId,
+} from "@/lib/escrowGrouping";
 
 interface Asset {
     id: string;
@@ -299,63 +303,32 @@ export default function Dashboard() {
     const selectedAssets = tokenizedAssets.filter(a => selectedAssetIds.has(a.id));
     const totalAssetValue = selectedAssets.reduce((sum, asset) => sum + asset.value, 0);
     const maxCreditLimit = totalAssetValue * 0.7; // 70% LTV
-    const escrowActionOwnerByAssetId = useMemo(() => {
-        const map = new Map<string, boolean>();
-        const grouped = new Map<string, Asset[]>();
-
-        assets.forEach((asset) => {
-            const contractId = asset.contractId || asset.contract_id;
-            if (!contractId) return;
-            if (asset.status !== "funding_requested" && asset.status !== "funded") return;
-            const list = grouped.get(contractId) || [];
-            list.push(asset);
-            grouped.set(contractId, list);
-        });
-
-        grouped.forEach((group) => {
-            const sorted = [...group].sort((a, b) => {
-                const aDate = a.created_at || "";
-                const bDate = b.created_at || "";
-                if (aDate !== bDate) return aDate.localeCompare(bDate);
-                return a.id.localeCompare(b.id);
-            });
-
-            const leaderId = sorted[0]?.id;
-            group.forEach((asset) => {
-                map.set(asset.id, asset.id === leaderId);
-            });
-        });
-
-        return map;
-    }, [assets]);
-    const escrowGroupedAssetsByLeaderId = useMemo(() => {
-        const groupedByContract = new Map<string, Asset[]>();
-        const leaderToGroup = new Map<string, Asset[]>();
-
-        assets.forEach((asset) => {
-            const contractId = asset.contractId || asset.contract_id;
-            if (!contractId) return;
-            if (asset.status !== "funding_requested" && asset.status !== "funded") return;
-            const list = groupedByContract.get(contractId) || [];
-            list.push(asset);
-            groupedByContract.set(contractId, list);
-        });
-
-        groupedByContract.forEach((group) => {
-            const sorted = [...group].sort((a, b) => {
-                const aDate = a.created_at || "";
-                const bDate = b.created_at || "";
-                if (aDate !== bDate) return aDate.localeCompare(bDate);
-                return a.id.localeCompare(b.id);
-            });
-            const leaderId = sorted[0]?.id;
-            if (leaderId) {
-                leaderToGroup.set(leaderId, sorted);
+    const escrowActionOwnerByAssetId = useMemo(
+        () => buildEscrowActionOwnerMap(assets),
+        [assets]
+    );
+    const escrowGroupedAssetsByLeaderId = useMemo(
+        () => buildEscrowGroupsByLeaderId(assets),
+        [assets]
+    );
+    const loanRequestByContractId = useMemo(() => {
+        const map = new Map<string, LoanRequest>();
+        loanRequests.forEach((loan) => {
+            if (loan.contract_id) {
+                map.set(loan.contract_id, loan);
             }
         });
-
-        return leaderToGroup;
-    }, [assets]);
+        return map;
+    }, [loanRequests]);
+    const loanAmountByAssetId = useMemo(() => {
+        const map = new Map<string, number>();
+        loanRequests.forEach((loan) => {
+            loan.asset_ids.forEach((assetId) => {
+                map.set(assetId, loan.amount_requested);
+            });
+        });
+        return map;
+    }, [loanRequests]);
 
     const toggleAssetSelection = (assetId: string) => {
         setSelectedAssetIds(prev => {
@@ -546,6 +519,17 @@ export default function Dashboard() {
         const contractId = asset.contractId || asset.contract_id;
         if (!contractId) return true;
         return escrowActionOwnerByAssetId.get(asset.id) ?? true;
+    };
+
+    const getLoanAmountForAsset = (asset: Asset) => {
+        const contractId = asset.contractId || asset.contract_id;
+        if (contractId) {
+            const contractLoan = loanRequestByContractId.get(contractId);
+            if (contractLoan?.amount_requested) {
+                return contractLoan.amount_requested;
+            }
+        }
+        return loanAmountByAssetId.get(asset.id) ?? asset.value;
     };
 
     const handleFirmarAcuerdo = async (asset: Asset, attempt = 1) => {
@@ -835,6 +819,14 @@ export default function Dashboard() {
                                             <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider">Valor Estimado</p>
                                             <p className="text-2xl font-bold text-white font-[family-name:var(--font-syne)]">${asset.value.toLocaleString()}</p>
                                         </div>
+                                        {(asset.status === "funding_requested" || asset.status === "funded") && (
+                                            <div className="bg-slate-950 border border-emerald-500/20 rounded-xl p-4 mb-6">
+                                                <p className="text-xs text-emerald-400 mb-1 uppercase tracking-wider font-bold">Monto del préstamo</p>
+                                                <p className="text-xl font-bold text-white font-[family-name:var(--font-syne)]">
+                                                    ${getLoanAmountForAsset(asset).toLocaleString()} USDC
+                                                </p>
+                                            </div>
+                                        )}
                                         {(asset.status === "funding_requested" || asset.status === "funded") &&
                                             (escrowGroupedAssetsByLeaderId.get(asset.id)?.length || 0) > 1 && (
                                                 <div className="bg-slate-950 border border-cyan-500/20 rounded-xl p-4 mb-6">
@@ -1410,7 +1402,9 @@ export default function Dashboard() {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="bg-slate-950 p-5 rounded-[1.5rem] border border-white/[0.05]">
                                         <p className="text-xs text-slate-500 uppercase tracking-wider mb-2 font-bold">Monto a recibir</p>
-                                        <p className="text-2xl font-bold text-white font-[family-name:var(--font-syne)]">${termsModalState.asset.value.toLocaleString()} USDC</p>
+                                        <p className="text-2xl font-bold text-white font-[family-name:var(--font-syne)]">
+                                            ${getLoanAmountForAsset(termsModalState.asset).toLocaleString()} USDC
+                                        </p>
                                     </div>
                                     <div className="bg-slate-950 p-5 rounded-[1.5rem] border border-white/[0.05]">
                                         <p className="text-xs text-slate-500 uppercase tracking-wider mb-2 font-bold">Tasa Anual</p>
