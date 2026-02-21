@@ -609,6 +609,7 @@ export default function CompanyDashboard() {
             borrowerWallet: string;
             borrowerName: string;
             assets: Asset[];
+            totalAssetsCount: number;
             loans: LoanRequest[];
             pendingCount: number;
             totalRequested: number;
@@ -622,10 +623,19 @@ export default function CompanyDashboard() {
                 borrowerWallet: wallet,
                 borrowerName: asset.owner || "Sin nombre",
                 assets: [],
+                totalAssetsCount: 0,
                 loans: [],
                 pendingCount: 0,
                 totalRequested: 0,
             };
+            current.totalAssetsCount += 1;
+            if (
+                (asset.status === "funding_requested" || asset.status === "funded") &&
+                !isEscrowActionOwner(asset)
+            ) {
+                grouped.set(wallet, current);
+                return;
+            }
             current.assets.push(asset);
             grouped.set(wallet, current);
         });
@@ -636,6 +646,7 @@ export default function CompanyDashboard() {
                 borrowerWallet: wallet,
                 borrowerName: loan.borrower_name || "Sin nombre",
                 assets: [],
+                totalAssetsCount: 0,
                 loans: [],
                 pendingCount: 0,
                 totalRequested: 0,
@@ -651,7 +662,7 @@ export default function CompanyDashboard() {
             if (b.pendingCount !== a.pendingCount) return b.pendingCount - a.pendingCount;
             return b.totalRequested - a.totalRequested;
         });
-    }, [assets, loanRequests]);
+    }, [assets, loanRequests, isEscrowActionOwner]);
 
     if (status === "loading") {
         return (
@@ -1516,145 +1527,182 @@ export default function CompanyDashboard() {
                     ) : (
                         <div className="divide-y divide-white/[0.05]">
                             {unifiedBorrowers.map((borrower) => (
-                                <div key={borrower.borrowerWallet} className="p-6">
-                                    <div className="mb-4">
-                                        <p className="text-base font-bold text-white">
-                                            {borrower.borrowerName}
-                                            <span className="ml-2 text-xs text-slate-500 font-mono">
-                                                {borrower.borrowerWallet.slice(0, 8)}...
-                                            </span>
-                                        </p>
-                                        <p className="text-xs text-slate-500 mt-1">
-                                            Garantías: <strong className="text-slate-300">{borrower.assets.length}</strong> ·
-                                            Solicitudes: <strong className="text-slate-300">{borrower.loans.length}</strong> ·
-                                            Pendientes: <strong className="text-yellow-400">{borrower.pendingCount}</strong> ·
-                                            Total solicitado: <strong className="text-orange-300">${borrower.totalRequested.toLocaleString()}</strong>
-                                        </p>
-                                    </div>
+                                <div key={borrower.borrowerWallet} className="p-6 hover:bg-white/[0.01] transition-colors">
+                                    {/* Fila Principal del Usuario */}
+                                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
 
-                                    <div className="grid md:grid-cols-2 gap-4">
-                                        <div className="bg-[#0b1021] border border-white/[0.05] rounded-xl p-4">
-                                            <p className="text-xs uppercase tracking-wider text-slate-300 font-semibold mb-3">
-                                                Garantías
-                                            </p>
-                                            {borrower.assets.length === 0 ? (
-                                                <p className="text-xs text-slate-500">Sin garantías.</p>
-                                            ) : (
-                                                <div className="space-y-3">
-                                                    {borrower.assets.map((asset) => (
-                                                        <div key={asset.id} className="border border-white/[0.05] rounded-lg p-3">
-                                                            <div className="flex items-center justify-between gap-3">
-                                                                <div>
-                                                                    <p className="text-sm font-semibold text-white">{asset.name}</p>
-                                                                    <p className="text-[10px] text-slate-500 font-mono">ID: {asset.id.slice(0, 8)}...</p>
-                                                                </div>
-                                                                <p className="text-sm font-bold text-white">
-                                                                    $
-                                                                    {(asset.status === "funding_requested" || asset.status === "funded"
-                                                                        ? getLoanAmountForAsset(asset)
-                                                                        : asset.value
-                                                                    ).toLocaleString()}
-                                                                </p>
-                                                            </div>
-                                                            <div className="mt-2 flex items-center justify-between gap-2">
-                                                                <span className="text-[10px] text-slate-400 uppercase tracking-wider">
-                                                                    Estado: {getAssetStatusLabel(asset.status)}
-                                                                </span>
-                                                            </div>
-                                                            <div className="mt-2">
-                                                                <AssetActions asset={asset} />
-                                                            </div>
-                                                        </div>
-                                                    ))}
+                                        {/* Izquierda: Info de usuario y resumen */}
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-4 mb-3">
+                                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg border border-white/10 uppercase">
+                                                    {borrower.borrowerName.substring(0, 2)}
                                                 </div>
-                                            )}
+                                                <div>
+                                                    <h3 className="text-lg font-bold text-white leading-tight">
+                                                        {borrower.borrowerName}
+                                                    </h3>
+                                                    <p className="text-xs text-slate-500 font-mono">
+                                                        {borrower.borrowerWallet.slice(0, 8)}...{borrower.borrowerWallet.slice(-6)}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                                                <span className="flex items-center gap-1">
+                                                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                                                    {borrower.assets.length} Garantías
+                                                </span>
+                                                <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                                                <span className="flex items-center gap-1">
+                                                    <FileText className="w-4 h-4 text-orange-400" />
+                                                    {borrower.loans.length} Solicitudes
+                                                </span>
+                                                {borrower.pendingCount > 0 && (
+                                                    <>
+                                                        <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                                                        <span className="text-yellow-500 font-medium">
+                                                            {borrower.pendingCount} pendientes
+                                                        </span>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
 
-                                        <div className="bg-[#0b1021] border border-white/[0.05] rounded-xl p-4">
-                                            <p className="text-xs uppercase tracking-wider text-slate-300 font-semibold mb-3">
-                                                Préstamos
+                                        {/* Derecha: Montos y Call to action principal */}
+                                        <div className="md:text-right flex flex-col items-start md:items-end">
+                                            <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-1">
+                                                Total Solicitado
                                             </p>
-                                            {borrower.loans.length === 0 ? (
-                                                <p className="text-xs text-slate-500">Sin solicitudes de préstamo.</p>
-                                            ) : (
-                                                <div className="space-y-3">
-                                                    {borrower.loans.map((lr) => {
-                                                        const lrAssets = assets.filter((a) => lr.asset_ids.includes(a.id));
-                                                        const loanStatusClass =
-                                                            lr.status === "pending"
-                                                                ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
-                                                                : lr.status === "approved"
-                                                                    ? "bg-blue-500/10 text-blue-500 border-blue-500/20"
-                                                                    : lr.status === "escrow_created"
-                                                                        ? "bg-purple-500/10 text-purple-500 border-purple-500/20"
-                                                                        : "bg-green-500/10 text-green-500 border-green-500/20";
-                                                        const loanStatusLabel =
-                                                            lr.status === "pending"
-                                                                ? "PENDIENTE"
-                                                                : lr.status === "approved"
-                                                                    ? "APROBADO"
-                                                                    : lr.status === "escrow_created"
-                                                                        ? "ESCROW CREADO"
-                                                                        : "ACREDITADO";
+                                            <div className="text-3xl font-bold font-[family-name:var(--font-syne)] text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
+                                                $ {borrower.totalRequested.toLocaleString()} <span className="text-lg opacity-60">USD</span>
+                                            </div>
+                                        </div>
+                                    </div>
 
-                                                        return (
-                                                            <div key={lr.id} className="border border-white/[0.05] rounded-lg p-3">
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <p className="text-sm font-bold text-orange-300">
-                                                                        ${lr.amount_requested.toLocaleString()}
-                                                                    </p>
-                                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${loanStatusClass}`}>
-                                                                        {loanStatusLabel}
+                                    {/* Detalles (Garantías y Préstamos) estilo sub-rows */}
+                                    {(borrower.assets.length > 0 || borrower.loans.length > 0) && (
+                                        <div className="mt-6 pl-4 md:pl-16 space-y-4">
+
+                                            {/* SECCIÓN PRESTAMOS */}
+                                            {borrower.loans.map((lr) => {
+                                                const lrAssets = assets.filter((a) => lr.asset_ids.includes(a.id));
+                                                // Definir visuales del estado
+                                                const isPending = lr.status === "pending";
+                                                const isFunded = lr.status === "funded";
+                                                const dotColor = isPending ? "bg-yellow-500" : isFunded ? "bg-emerald-500" : "bg-purple-500";
+                                                const statusText = isPending ? "En revisión / Pendiente" : lr.status === "approved" ? "Aprobado" : lr.status === "escrow_created" ? "Escrow Creado" : "Préstamo Acreditado";
+
+                                                return (
+                                                    <div key={lr.id} className="bg-slate-900/40 rounded-xl p-4 border border-white/[0.03] hover:border-white/[0.08] transition-colors relative overflow-hidden group">
+                                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-orange-500/50 to-amber-500/50 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+
+                                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pl-2">
+                                                            <div>
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="text-sm font-bold text-white flex items-center gap-2">
+                                                                        <Rocket className="w-4 h-4 text-orange-400" />
+                                                                        Préstamo por $ {lr.amount_requested.toLocaleString()} USD
+                                                                    </span>
+                                                                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-white/[0.05] bg-slate-950 text-[10px] font-semibold text-slate-300">
+                                                                        <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`}></span>
+                                                                        {statusText}
                                                                     </span>
                                                                 </div>
-                                                                <div className="mt-2 text-xs text-slate-500">
-                                                                    Colateral: <strong className="text-slate-300">${lr.collateral_value.toLocaleString()}</strong> ·
-                                                                    LTV: <strong className="text-slate-300">{(lr.ltv_ratio * 100).toFixed(0)}%</strong> ·
-                                                                    Garantías: <strong className="text-slate-300">{lr.asset_ids.length}</strong>
+                                                                <div className="text-xs text-slate-500 mt-2 flex gap-3">
+                                                                    <span>Colateral total: <strong className="text-slate-300">${lr.collateral_value.toLocaleString()}</strong></span>
+                                                                    <span>LTV: <strong className="text-slate-300">{(lr.ltv_ratio * 100).toFixed(0)}%</strong></span>
                                                                 </div>
+
+                                                                {/* Garantias tags */}
                                                                 {lrAssets.length > 0 && (
-                                                                    <div className="flex gap-2 mt-2 flex-wrap">
+                                                                    <div className="flex gap-2 mt-3 flex-wrap">
                                                                         {lrAssets.map((a) => (
-                                                                            <span key={a.id} className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded-lg border border-white/[0.05]">
-                                                                                {a.name} • ${a.value.toLocaleString()}
+                                                                            <span key={a.id} className="text-[10px] bg-slate-800 text-slate-400 px-2.5 py-1 rounded-lg border border-white/[0.05] flex items-center gap-1.5">
+                                                                                <ShieldCheck className="w-3 h-3 text-emerald-500/70" /> {a.name}
                                                                             </span>
                                                                         ))}
                                                                     </div>
                                                                 )}
-                                                                <div className="mt-3 flex items-center gap-2">
-                                                                    {lr.status === "pending" && (
-                                                                        <button
-                                                                            onClick={() => handleCreateEscrowFromLoanRequest(lr)}
-                                                                            disabled={isProcessing === lr.id}
-                                                                            className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-3 py-2 rounded-lg font-bold text-xs hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50"
-                                                                        >
-                                                                            {isProcessing === lr.id ? (
-                                                                                <><Loader2 className="w-4 h-4 animate-spin" /> Procesando...</>
-                                                                            ) : (
-                                                                                <><Rocket className="w-4 h-4" /> Crear Escrow</>
-                                                                            )}
-                                                                        </button>
-                                                                    )}
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2 md:w-auto w-full">
+                                                                {lr.status === "pending" && (
                                                                     <button
-                                                                        onClick={() => handleDeleteLoanRequest(lr.id)}
-                                                                        disabled={isDeletingLoanRequestId === lr.id}
-                                                                        className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 px-3 py-2 rounded-lg font-bold text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                                                        onClick={() => handleCreateEscrowFromLoanRequest(lr)}
+                                                                        disabled={isProcessing === lr.id}
+                                                                        className="flex-1 md:flex-none bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/20 px-4 py-2 rounded-xl font-bold text-xs transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                                                                     >
-                                                                        {isDeletingLoanRequestId === lr.id ? (
-                                                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                                                        {isProcessing === lr.id ? (
+                                                                            <><Loader2 className="w-4 h-4 animate-spin" /> Creando Escrow...</>
                                                                         ) : (
-                                                                            <Trash2 className="w-4 h-4" />
+                                                                            <><Rocket className="w-4 h-4" /> Aprobar e ir a Fondeo</>
                                                                         )}
-                                                                        Borrar
                                                                     </button>
+                                                                )}
+                                                                <button
+                                                                    onClick={() => handleDeleteLoanRequest(lr.id)}
+                                                                    disabled={isDeletingLoanRequestId === lr.id}
+                                                                    className="p-2 bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 rounded-xl text-red-400/70 hover:text-red-400 transition-colors"
+                                                                    title="Eliminar Solicitud"
+                                                                >
+                                                                    {isDeletingLoanRequestId === lr.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+
+                                            {/* SECCIÓN GARANTÍAS */}
+                                            {(() => {
+                                                const seenContracts = new Set<string>();
+                                                const assetsForDisplay = borrower.assets.filter((asset) => {
+                                                    const contractId = asset.contractId || asset.contract_id;
+                                                    const isUnifiedState =
+                                                        asset.status === "funding_requested" || asset.status === "funded";
+                                                    if (!isUnifiedState || !contractId) return true;
+                                                    if (seenContracts.has(contractId)) return false;
+                                                    seenContracts.add(contractId);
+                                                    return true;
+                                                });
+
+                                                return assetsForDisplay.map((asset) => {
+                                                // Mostrar acciones para las garantías
+                                                return (
+                                                    <div key={asset.id} className="bg-slate-900/40 rounded-xl p-4 border border-white/[0.03] hover:border-white/[0.08] transition-colors relative overflow-hidden group">
+                                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-500/50 to-cyan-500/50 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+
+                                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pl-2">
+                                                            <div>
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="text-sm font-bold text-slate-200">
+                                                                        Garantía: {asset.name}
+                                                                    </span>
+                                                                    <span className="text-xs text-slate-500 font-mono ml-2">ID: {asset.id.slice(0, 8)}...</span>
+                                                                </div>
+
+                                                                <div className="mt-2 flex items-center gap-2">
+                                                                    <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1.5 bg-slate-800/50 px-2 py-1 rounded-md">
+                                                                        <span className={`w-1.5 h-1.5 rounded-full ${asset.status === 'funded' ? 'bg-emerald-500' : 'bg-blue-500'}`}></span>
+                                                                        Estado: {getAssetStatusLabel(asset.status)}
+                                                                    </span>
+
+                                                                    <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1.5 bg-slate-800/50 px-2 py-1 rounded-md">
+                                                                        Valor Aprobado: <strong className="text-white">${getLoanAmountForAsset(asset).toLocaleString()}</strong>
+                                                                    </span>
                                                                 </div>
                                                             </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
+                                                            <div className="w-full md:w-auto">
+                                                                <AssetActions asset={asset} />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                                });
+                                            })()}
+
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             ))}
                         </div>

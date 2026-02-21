@@ -311,8 +311,9 @@ export default function Dashboard() {
             .filter((loan) => (loan.asset_ids || []).some((id) => selectedAssetIds.has(id)))
             .reduce((sum, loan) => sum + (loan.amount_requested || 0), 0);
     }, [loanRequests, selectedAssetIds]);
-    const availableCollateralValue = Math.max(0, totalAssetValue - committedAmountOnSelection);
-    const maxCreditLimit = availableCollateralValue * 0.7; // 70% LTV sobre colateral disponible
+    const grossCreditLimit = totalAssetValue * 0.7;
+    const maxCreditLimitRaw = Math.max(0, grossCreditLimit - committedAmountOnSelection); // 70% LTV menos comprometido
+    const maxCreditLimit = Math.floor(maxCreditLimitRaw);
     const escrowActionOwnerByAssetId = useMemo(
         () => buildEscrowActionOwnerMap(assets),
         [assets]
@@ -1059,7 +1060,7 @@ export default function Dashboard() {
                                         <h3 className="text-xs font-bold text-orange-500 mb-2 font-[family-name:var(--font-syne)]">LÍMITE DE CRÉDITO DISPONIBLE (70% LTV)</h3>
                                         <p className="text-3xl font-bold text-orange-400">{formatCurrency(maxCreditLimit)}</p>
                                         <p className="text-xs text-orange-200/80 mt-2">
-                                            Comprometido: {formatCurrency(committedAmountOnSelection)} · Disponible: {formatCurrency(availableCollateralValue)}
+                                            Base 70%: {formatCurrency(grossCreditLimit)} · Comprometido: {formatCurrency(committedAmountOnSelection)}
                                         </p>
                                     </div>
                                 </div>
@@ -1089,7 +1090,7 @@ export default function Dashboard() {
                                         type="range"
                                         min="0"
                                         max={maxCreditLimit}
-                                        step={maxCreditLimit < 100 ? 1 : maxCreditLimit < 1000 ? 10 : maxCreditLimit < 10000 ? 100 : 1000}
+                                        step={1}
                                         value={loanAmount}
                                         onChange={(e) => setLoanAmount(Number(e.target.value))}
                                         className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-orange-500 mt-2"
