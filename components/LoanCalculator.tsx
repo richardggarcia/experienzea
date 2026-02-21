@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Coins, ArrowRight } from "lucide-react";
 
 export default function LoanCalculator() {
-    const [assetValue, setAssetValue] = useState(10000);
+    const [assetValue, setAssetValue] = useState(5000);
     const ltv = 0.70; // 70% LTV
     const loanAmount = assetValue * ltv;
     const formatter = useMemo(() => new Intl.NumberFormat("en-US"), []);
@@ -33,7 +33,7 @@ export default function LoanCalculator() {
                     <input
                         type="range"
                         min="5000"
-                        max="500000"
+                        max="50000"
                         step="5000"
                         value={assetValue}
                         onChange={(e) => setAssetValue(Number(e.target.value))}
@@ -41,7 +41,7 @@ export default function LoanCalculator() {
                     />
                     <div className="flex justify-between text-xs text-slate-500 mt-2 font-mono">
                         <span>$5k</span>
-                        <span>$500k+</span>
+                        <span>$50k+</span>
                     </div>
                 </div>
 
@@ -58,7 +58,7 @@ export default function LoanCalculator() {
                     href="/solicitante"
                     className="flex-1 py-4 bg-orange-500 hover:bg-orange-600 active:scale-95 transition-all text-slate-900 font-bold font-[family-name:var(--font-syne)] rounded-2xl flex items-center justify-center gap-2 group"
                 >
-                    Ir al Panel Solicitante <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    Continuar como Solicitante <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
             </div>
         </div>

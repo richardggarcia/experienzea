@@ -17,10 +17,10 @@ export default function DashboardSelector() {
                         <span className="text-2xl font-bold text-orange-500">E</span>
                     </div>
                     <h1 className="text-4xl font-bold text-white font-[family-name:var(--font-syne)] mb-3">
-                        ¿Cómo querés acceder?
+                        Elegí tu portal
                     </h1>
                     <p className="text-slate-400">
-                        Seleccioná el portal según tu rol
+                        Ingresá según tu perfil de uso
                     </p>
                 </div>
 
@@ -41,7 +41,7 @@ export default function DashboardSelector() {
                                 Soy Solicitante
                             </h2>
                             <p className="text-slate-400 mb-6 leading-relaxed">
-                                Quiero tokenizar mis activos y acceder a liquidez usando mi wallet personal.
+                                Tokenizá garantías y pedí liquidez con tu wallet.
                             </p>
                             <div className="flex items-center gap-2 text-orange-400 font-bold group-hover:gap-3 transition-all">
                                 Ingresar <ArrowRight className="w-5 h-5" />
@@ -65,7 +65,7 @@ export default function DashboardSelector() {
                                     Soy Inversor <span className="text-xs bg-slate-800 text-slate-400 px-2 py-1 rounded-md font-bold">PRÓXIMAMENTE</span>
                                 </h2>
                                 <p className="text-slate-500 mb-6 leading-relaxed">
-                                    Accedé a oportunidades de inversión respaldadas por activos reales del campo.
+                                    Invertí en créditos respaldados por activos reales.
                                 </p>
                                 <div className="flex items-center gap-2 text-slate-600 font-bold">
                                     En desarrollo <Lock className="w-4 h-4 ml-1" />

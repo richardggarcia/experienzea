@@ -2,7 +2,7 @@
 import Link from "next/link";
 import LottieHero from "@/components/LottieHero";
 import LoanCalculator from "@/components/LoanCalculator";
-import { ArrowRight, Tractor, Building2, Car, ShieldCheck, Zap, Coins, Check, Rocket, Globe, Lock } from "lucide-react";
+import { ArrowRight, Tractor, Building2, Car, ShieldCheck, Zap, Coins, Check, Rocket } from "lucide-react";
 import { motion } from "framer-motion";
 import AssetLottie from "@/components/AssetLottie";
 
@@ -22,7 +22,7 @@ export default function Home() {
         <div className="hidden md:flex gap-8 text-sm font-medium text-slate-400">
           <a href="#calculator" className="hover:text-blue-400 transition-colors">Calculadora</a>
           <a href="#assets" className="hover:text-white transition-colors">Activos</a>
-          <a href="#how" className="hover:text-white transition-colors">Cómo Funciona</a>
+          <a href="#why-us" className="hover:text-white transition-colors">Cómo Funciona</a>
         </div>
         <Link
           href="/dashboard"
@@ -56,10 +56,10 @@ export default function Home() {
 
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <Link
-                href="/dashboard"
+                href="/solicitante"
                 className="group relative px-8 py-4 bg-blue-600 text-white font-bold rounded-2xl overflow-hidden hover:scale-105 transition-transform duration-300 flex items-center justify-center gap-3 shadow-[0_10px_40px_rgba(37,99,235,0.3)]"
               >
-                <span className="relative z-10">Creá tu Cuenta</span>
+                <span className="relative z-10">Soy Solicitante</span>
                 <ArrowRight className="w-5 h-5 relative z-10 group-hover:translate-x-1 transition-transform" />
               </Link>
               <a href="#calculator" className="px-8 py-4 bg-transparent border border-slate-700 text-white font-bold rounded-2xl hover:bg-slate-800 transition-colors flex items-center justify-center">
@@ -167,7 +167,7 @@ export default function Home() {
               transition={{ duration: 0.7, ease: "easeOut" }}
             >
               <h2 className="text-4xl md:text-5xl font-bold mb-6 font-[family-name:var(--font-syne)]">
-                Calculá tu <span className="text-blue-500">Poder de Fuego.</span>
+                Simulá tu <span className="text-blue-500">Línea de Crédito.</span>
               </h2>
               <p className="text-slate-400 text-lg mb-8 leading-relaxed">
                 ¿Cuánto vale tu activo? Usá nuestra calculadora para estimar la liquidez inmediata.
@@ -273,7 +273,7 @@ export default function Home() {
 
                       {/* Render Lottie - Big & Centered */}
                       <div className="w-full h-full p-4 flex items-center justify-center transform group-hover:scale-105 transition-transform duration-500">
-                        <AssetLottie type={item.type} />
+                        <AssetLottie type={item.type as any} />
                       </div>
                     </div>
 
@@ -329,14 +329,14 @@ export default function Home() {
 
 
         {/* COMPARISON SECTION */}
-        <section className="py-16 md:py-20 bg-slate-900/30 border-y border-white/[0.05]">
+        <section id="why-us" className="py-16 md:py-20 bg-slate-900/30 border-y border-white/[0.05]">
           <div className="max-w-7xl mx-auto px-6">
             <div className="text-center mb-16">
               <h2 className="text-4xl md:text-5xl font-bold mb-6 font-[family-name:var(--font-syne)]">
                 ¿Por qué ExperienZea?
               </h2>
               <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-                Diseñado para la economía real.
+                Diseñado para la economía real. Así de fácil funciona:
               </p>
             </div>
 
@@ -369,28 +369,69 @@ export default function Home() {
               Tu Liquidez te espera.
             </h2>
             <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-3 px-10 py-5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-lg shadow-[0_10px_50px_rgba(37,99,235,0.4)] transition-all hover:scale-105"
+              href="/solicitante"
+              className="inline-flex items-center gap-2.5 px-7 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-base shadow-[0_8px_30px_rgba(37,99,235,0.28)] transition-all hover:scale-[1.02]"
             >
-              <Rocket className="w-6 h-6" />
-              Comenzar Ahora
+              <Rocket className="w-5 h-5" />
+              Solicitar Préstamo
             </Link>
           </div>
         </section>
 
         {/* FOOTER */}
-        <footer className="border-t border-white/[0.05] bg-slate-950 py-12 px-6">
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold shadow-lg">E</div>
-              <span className="font-bold font-[family-name:var(--font-syne)]">ExperienZea</span>
+        <footer className="bg-[#0b1021] border-t border-white/[0.05] pt-14 pb-8">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
+              <div className="rounded-2xl border border-white/[0.06] bg-slate-900/40 p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-500/20">E</div>
+                  <span className="text-xl font-bold tracking-tight font-[family-name:var(--font-syne)] text-white">ExperienZea</span>
+                </div>
+                <p className="text-slate-400 text-sm leading-relaxed max-w-xl">
+                  Liquidez respaldada por activos reales. Tokenizá, usá tu garantía y solicitá crédito con trazabilidad sobre Stellar.
+                </p>
+                <div className="flex flex-wrap items-center gap-3 mt-5">
+                  <Link
+                    href="/solicitante"
+                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-500 transition-colors"
+                  >
+                    Portal Solicitante
+                  </Link>
+                  <span className="inline-flex items-center rounded-lg border border-white/[0.1] bg-slate-950 px-4 py-2 text-sm font-bold text-slate-500">
+                    Portal Inversor · Próximamente
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="rounded-2xl border border-white/[0.06] bg-slate-900/30 p-6">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 mb-4">Plataforma</p>
+                  <div className="space-y-3">
+                    <a href="#assets" className="block text-sm text-slate-300 hover:text-blue-400 transition-colors">Activos soportados</a>
+                    <a href="#calculator" className="block text-sm text-slate-300 hover:text-blue-400 transition-colors">Simulador de crédito</a>
+                    <a href="#why-us" className="block text-sm text-slate-300 hover:text-blue-400 transition-colors">Cómo funciona</a>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-white/[0.06] bg-slate-900/30 p-6">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 mb-4">Legal</p>
+                  <div className="space-y-3">
+                    <a href="#" className="block text-sm text-slate-300 hover:text-blue-400 transition-colors">Términos del servicio</a>
+                    <a href="#" className="block text-sm text-slate-300 hover:text-blue-400 transition-colors">Política de privacidad</a>
+                    <a href="#" className="block text-sm text-slate-300 hover:text-blue-400 transition-colors">Contacto</a>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="text-slate-500 text-sm">
-              © 2026 ExperienZea Protocol. Built on Stellar.
-            </div>
-            <div className="flex gap-6 text-slate-400">
-              <a href="#" className="hover:text-blue-400 transition-colors"><Globe className="w-5 h-5" /></a>
-              <a href="#" className="hover:text-blue-400 transition-colors"><Lock className="w-5 h-5" /></a>
+
+            <div className="pt-6 border-t border-white/[0.05] flex flex-col md:flex-row justify-between items-center gap-4">
+              <p className="text-slate-500 text-sm">
+                © {new Date().getFullYear()} ExperienZea Protocol. Todos los derechos reservados.
+              </p>
+              <div className="flex items-center gap-2 text-slate-500 text-xs font-mono bg-slate-900 px-3 py-1.5 rounded-lg border border-white/[0.05]">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Built on Stellar
+              </div>
             </div>
           </div>
         </footer>

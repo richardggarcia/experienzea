@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@/hooks/useWallet";
 import {
@@ -12,42 +12,10 @@ import { v4 as uuidv4 } from "uuid";
 import { Rocket, LogOut, Loader2, ArrowLeft, Plus, CheckCircle2, ShieldCheck, Tractor, Building2, Car, Coins, Check, X, AlertCircle, FileText, Upload, Pencil, Trash2 } from "lucide-react";
 import FileUpload from "@/components/FileUpload";
 import KYCModal from "@/components/KYCModal";
+import TopMetrics from "@/components/solicitante/TopMetrics";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-    buildEscrowActionOwnerMap,
-    buildEscrowGroupsByLeaderId,
-} from "@/lib/escrowGrouping";
-
-interface Asset {
-    id: string;
-    type: 'vehiculo' | 'inmueble' | 'maquinaria' | 'otro';
-    name: string;
-    value: number;
-    owner: string;
-    owner_wallet?: string;
-    ownerWallet?: string;
-    status: 'pending_review' | 'approved' | 'tokenized' | 'funding_requested' | 'funded';
-    contract_id?: string;
-    contractId?: string;
-    documents?: {
-        insurance?: string;
-        property?: string;
-    };
-    created_at?: string;
-}
-
-interface LoanRequest {
-    id: string;
-    borrower_wallet: string;
-    borrower_name?: string;
-    amount_requested: number;
-    collateral_value: number;
-    ltv_ratio: number;
-    asset_ids: string[];
-    status: "pending" | "approved" | "escrow_created" | "funded";
-    contract_id?: string;
-    created_at?: string;
-}
+import { useSolicitanteCalculations } from "@/hooks/useSolicitanteCalculations";
+import type { Asset, LoanRequest } from "@/types/solicitante";
 
 export default function Dashboard() {
     const { address, connect, isConnecting, disconnect } = useWallet();
@@ -276,70 +244,25 @@ export default function Dashboard() {
     // Loan Simulator State
     const [loanAmount, setLoanAmount] = useState<number>(0);
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
-    const collateralEligibleAssets = assets.filter(
-        (a) => a.status === "tokenized" || a.status === "funded"
-    );
-    const selectedAssets = collateralEligibleAssets.filter(a => selectedAssetIds.has(a.id));
-    const totalAssetValue = selectedAssets.reduce((sum, asset) => sum + asset.value, 0);
-    const committedAmountOnSelection = useMemo(() => {
-        if (selectedAssetIds.size === 0) return 0;
-        return loanRequests
-            .filter((loan) => ["pending", "approved", "escrow_created", "funded"].includes(loan.status))
-            .filter((loan) => (loan.asset_ids || []).some((id) => selectedAssetIds.has(id)))
-            .reduce((sum, loan) => sum + (loan.amount_requested || 0), 0);
-    }, [loanRequests, selectedAssetIds]);
-    const grossCreditLimit = totalAssetValue * 0.7;
-    const maxCreditLimitRaw = Math.max(0, grossCreditLimit - committedAmountOnSelection); // 70% LTV menos comprometido
-    const maxCreditLimit = Math.floor(maxCreditLimitRaw);
-    const tokenizedOnlyValue = assets
-        .filter((a) => a.status === "tokenized")
-        .reduce((sum, asset) => sum + asset.value, 0);
-    const liquidityAvailableToday = Math.floor(tokenizedOnlyValue * 0.7);
-    const totalBackedValue = assets
-        .filter((a) => a.status === "tokenized" || a.status === "funding_requested" || a.status === "funded")
-        .reduce((sum, asset) => sum + asset.value, 0);
-    const pendingReviewAssets = assets.filter((a) => a.status === "pending_review");
-    const pendingReviewValue = pendingReviewAssets.reduce((sum, asset) => sum + asset.value, 0);
-    const liquidatedAmount = loanRequests
-        .filter((loan) => loan.status === "funded")
-        .reduce((sum, loan) => sum + (loan.amount_requested || 0), 0);
-    const escrowActionOwnerByAssetId = useMemo(
-        () => buildEscrowActionOwnerMap(assets),
-        [assets]
-    );
-    const escrowGroupedAssetsByLeaderId = useMemo(
-        () => buildEscrowGroupsByLeaderId(assets),
-        [assets]
-    );
-    const escrowLeaderByContractId = useMemo(() => {
-        const map = new Map<string, Asset>();
-        escrowGroupedAssetsByLeaderId.forEach((group, leaderId) => {
-            const leader = group.find((item) => item.id === leaderId) || group[0];
-            const contractId = leader?.contractId || leader?.contract_id;
-            if (leader && contractId) {
-                map.set(contractId, leader);
-            }
-        });
-        return map;
-    }, [escrowGroupedAssetsByLeaderId]);
-    const loanRequestByContractId = useMemo(() => {
-        const map = new Map<string, LoanRequest>();
-        loanRequests.forEach((loan) => {
-            if (loan.contract_id) {
-                map.set(loan.contract_id, loan);
-            }
-        });
-        return map;
-    }, [loanRequests]);
-    const loanAmountByAssetId = useMemo(() => {
-        const map = new Map<string, number>();
-        loanRequests.forEach((loan) => {
-            loan.asset_ids.forEach((assetId) => {
-                map.set(assetId, loan.amount_requested);
-            });
-        });
-        return map;
-    }, [loanRequests]);
+    const {
+        collateralEligibleAssets,
+        selectedAssets,
+        totalAssetValue,
+        committedAmountOnSelection,
+        grossCreditLimit,
+        maxCreditLimit,
+        liquidityAvailableToday,
+        totalBackedValue,
+        pendingReviewAssets,
+        pendingReviewValue,
+        liquidatedAmount,
+        escrowGroupedAssetsByLeaderId,
+        isEscrowActionOwner,
+        getLoanAmountForAsset,
+        getCollateralTotalForAsset,
+        getCollateralNamesForAsset,
+        getEscrowLeaderAsset,
+    } = useSolicitanteCalculations(assets, loanRequests, selectedAssetIds);
 
     const toggleAssetSelection = (assetId: string) => {
         setSelectedAssetIds(prev => {
@@ -542,44 +465,6 @@ export default function Dashboard() {
         }
     }
 
-    const isEscrowActionOwner = (asset: Asset) => {
-        const contractId = asset.contractId || asset.contract_id;
-        if (!contractId) return true;
-        return escrowActionOwnerByAssetId.get(asset.id) ?? true;
-    };
-
-    const getLoanAmountForAsset = (asset: Asset) => {
-        const contractId = asset.contractId || asset.contract_id;
-        if (contractId) {
-            const contractLoan = loanRequestByContractId.get(contractId);
-            if (contractLoan?.amount_requested) {
-                return contractLoan.amount_requested;
-            }
-        }
-        return loanAmountByAssetId.get(asset.id) ?? asset.value;
-    };
-
-    const getCollateralTotalForAsset = (asset: Asset) => {
-        const grouped = escrowGroupedAssetsByLeaderId.get(asset.id);
-        if (grouped && grouped.length > 0) {
-            return grouped.reduce((sum, item) => sum + item.value, 0);
-        }
-        return asset.value;
-    };
-
-    const getCollateralNamesForAsset = (asset: Asset) => {
-        const grouped = escrowGroupedAssetsByLeaderId.get(asset.id);
-        if (grouped && grouped.length > 0) {
-            return grouped.map((item) => item.name).join(", ");
-        }
-        return asset.name;
-    };
-    const getEscrowLeaderAsset = (asset: Asset) => {
-        const contractId = asset.contractId || asset.contract_id;
-        if (!contractId) return null;
-        return escrowLeaderByContractId.get(contractId) || null;
-    };
-
     const handleFirmarAcuerdo = async (asset: Asset, attempt = 1) => {
         if (!address) return;
         if (!asset.contractId && !asset.contract_id) {
@@ -772,41 +657,14 @@ export default function Dashboard() {
                             )}
                         </div>
 
-                        {/* Stats - Shared between Garantias and Prestamos */}
-                        <div className="grid md:grid-cols-4 gap-6 mb-12">
-                            <div className="bg-[#0b1021] p-6 rounded-[2rem] border border-white/[0.02] shadow-lg">
-                                <p className="text-blue-500 text-[10px] font-bold uppercase tracking-widest mb-3 font-[family-name:var(--font-syne)]">LIQUIDEZ DISPONIBLE</p>
-                                <p className="text-4xl font-bold text-white mb-1 font-[family-name:var(--font-syne)]">
-                                    ${liquidityAvailableToday.toLocaleString()}
-                                    <span className="text-lg text-slate-500 font-normal font-[family-name:var(--font-manrope)] ml-2">USDC</span>
-                                </p>
-                                <p className="text-xs text-slate-500">Cupo hoy (70% sobre garantías tokenizadas)</p>
-                                <p className="text-[11px] text-slate-600 mt-1">
-                                    Saldo wallet: {walletBalance !== null ? `$${walletBalance.toLocaleString()}` : "$0.00"}
-                                </p>
-                            </div>
-                            <div className="bg-[#0b1021] p-6 rounded-[2rem] border border-white/[0.02] shadow-lg">
-                                <p className="text-blue-500 text-[10px] font-bold uppercase tracking-widest mb-3 font-[family-name:var(--font-syne)]">VALOR RESPALDADO</p>
-                                <p className="text-4xl font-bold text-white mb-1 font-[family-name:var(--font-syne)]">
-                                    ${totalBackedValue.toLocaleString()}
-                                </p>
-                                <p className="text-xs text-slate-500">Tokenizado + escrow creado + acreditado</p>
-                            </div>
-                            <div className="bg-[#0b1021] p-6 rounded-[2rem] border border-white/[0.02] shadow-lg">
-                                <p className="text-blue-500 text-[10px] font-bold uppercase tracking-widest mb-3 font-[family-name:var(--font-syne)]">CRÉDITO ACREDITADO</p>
-                                <p className="text-4xl font-bold text-emerald-400 mb-1 font-[family-name:var(--font-syne)]">
-                                    ${liquidatedAmount.toLocaleString()}
-                                </p>
-                                <p className="text-xs text-slate-500">Préstamos desembolsados al solicitante</p>
-                            </div>
-                            <div className="bg-[#0b1021] p-6 rounded-[2rem] border border-white/[0.02] shadow-lg">
-                                <p className="text-blue-500 text-[10px] font-bold uppercase tracking-widest mb-3 font-[family-name:var(--font-syne)]">EN REVISIÓN</p>
-                                <p className="text-4xl font-bold text-white mb-1 font-[family-name:var(--font-syne)]">
-                                    ${pendingReviewValue.toLocaleString()}
-                                </p>
-                                <p className="text-xs text-slate-500">({pendingReviewAssets.length} garantía(s))</p>
-                            </div>
-                        </div>
+                        <TopMetrics
+                            liquidityAvailableToday={liquidityAvailableToday}
+                            walletBalance={walletBalance}
+                            totalBackedValue={totalBackedValue}
+                            liquidatedAmount={liquidatedAmount}
+                            pendingReviewValue={pendingReviewValue}
+                            pendingReviewCount={pendingReviewAssets.length}
+                        />
                     </>
                 )}
 

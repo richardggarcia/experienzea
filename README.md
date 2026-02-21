@@ -1,13 +1,13 @@
-# ExperienZea - RWA Lending Protocol
+# ExperienZea - Protocolo de Préstamos con RWA
 
-![ExperienZea](https://img.shields.io/badge/ExperienZea-RWA%20Lending-orange)
+![ExperienZea](https://img.shields.io/badge/ExperienZea-Pr%C3%A9stamos%20RWA-orange)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 ![React](https://img.shields.io/badge/React-19-blue)
 ![Impacta](https://img.shields.io/badge/Impacta-Bootcamp-purple)
 ![Stellar](https://img.shields.io/badge/Stellar-Blockchain-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
+![Licencia](https://img.shields.io/badge/Licencia-MIT-green)
 
-**Proyecto desarrollado para el Impacta Bootcamp - Stellar Blockchain**
+**Proyecto desarrollado para el Impacta Bootcamp - Blockchain Stellar**
 
 **Tu Activo Real = Liquidez Inmediata**
 
@@ -15,72 +15,72 @@ ExperienZea es una plataforma DeFi (Finanzas Descentralizadas) que permite token
 
 ## 🚀 Características Principales
 
-### Para Solicitantes (Borrowers)
-- 🔐 **Conexión con Freighter Wallet** - Wallet nativa de Stellar
+### Para Solicitantes
+- 🔐 **Conexión con Freighter Wallet** - Billetera nativa de Stellar
 - 📄 **Carga de documentos** - Seguro y título de propiedad
 - 💰 **Simulador de préstamos** - Calcula tu poder de fuego (LTV 70%)
 - 📊 **Seguimiento de estado** - Ve el progreso de tu solicitud en tiempo real
 - 💾 **Perfil persistente** - Datos guardados para futuras solicitudes
 
 ### Para Administradores (ExperienZea)
-- 🔒 **Autenticación segura** - Login con email/password vía NextAuth.js
+- 🔒 **Autenticación segura** - Inicio de sesión con correo/contraseña vía NextAuth.js
 - 👁️ **Revisión de documentos** - Vista previa de imágenes antes de aprobar
-- ✅ **Flujo de aprobación** - Aprueba → Tokeniza → Crea Escrow → Envía fondos
-- 📈 **Dashboard completo** - Estadísticas de activos y préstamos
+- ✅ **Flujo de aprobación** - Aprueba → Tokeniza → Crea Custodia (Escrow) → Envía fondos
+- 📈 **Panel completo** - Estadísticas de activos y préstamos
 
 ## 🏗️ Arquitectura del Sistema
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Solicitante   │     │   ExperienZea   │     │   Blockchain    │
-│   (Freighter)   │────▶│    (Admin)      │────▶│   (Stellar)     │
+│   Solicitante   │     │   ExperienZea   │     │   Cadena de     │
+│   (Freighter)   │────▶│ (Administrador) │────▶│  bloques        │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
          │                       │                       │
          ▼                       ▼                       ▼
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │   Documentos    │     │   Supabase DB   │     │   Trustless     │
-│   (Cloudflare   │     │   (PostgreSQL)  │     │   Work Escrow   │
+│   (Cloudflare   │     │   (PostgreSQL)  │     │ Work (Escrow)   │
 │      R2)        │     │                 │     │                 │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
                                                               │
                                                               ▼
                                                     ┌─────────────────┐
-                                                    │   Asset NFT     │
+                                                    │   NFT del Activo │
                                                     │   (Soroban)     │
                                                     └─────────────────┘
 ```
 
 ## 🛠️ Tecnologías Utilizadas
 
-- **Frontend**: Next.js 16, React 19, TypeScript, Tailwind CSS, Framer Motion
-- **Autenticación**: NextAuth.js (Admin), Freighter Wallet (Solicitantes)
+- **Interfaz web**: Next.js 16, React 19, TypeScript, Tailwind CSS, Framer Motion
+- **Autenticación**: NextAuth.js (Administrador), billetera Freighter (Solicitantes)
 - **Base de Datos**: Supabase (PostgreSQL)
 - **Almacenamiento**: Cloudflare R2 (documentos)
-- **Blockchain**: Stellar Network (Testnet)
+- **Blockchain**: Red Stellar (Testnet)
 - **Despliegue**: Vercel
 
 ## 📋 Flujo de Trabajo
 
 ### 1. Solicitud de Préstamo
-1. Solicitante conecta su wallet Freighter
+1. Solicitante conecta su billetera Freighter
 2. Completa datos del activo y carga documentos
 3. Envía a revisión
 
 ### 2. Revisión y Aprobación
-1. Admin revisa documentos en el panel
-2. Marca checkbox de confirmación
+1. Administrador revisa documentos en el panel
+2. Marca la casilla de confirmación
 3. Aprueba el activo
 
 ### 3. Tokenización
-1. Admin tokeniza el activo (mintea NFT)
+1. Administrador tokeniza el activo (emite NFT)
 2. El activo pasa a estado "Tokenizado"
 
 ### 4. Creación de Escrow
-1. Admin crea escrow en Trustless Work
-2. Se genera un contract ID único
+1. Administrador crea escrow en Trustless Work
+2. Se genera un ID de contrato único
 
 ### 5. Fondeo
-1. Admin envía fondos USDC al escrow
+1. Administrador envía fondos USDC al escrow
 2. Solicitante recibe los fondos
 
 ## 🚀 Cómo Empezar
@@ -89,7 +89,7 @@ ExperienZea es una plataforma DeFi (Finanzas Descentralizadas) que permite token
 - Node.js 18+
 - Cuenta en Supabase
 - Cuenta en Cloudflare (para R2)
-- Wallet Freighter instalada (para testing)
+- Billetera Freighter instalada (para pruebas)
 
 ### Instalación
 
@@ -111,7 +111,7 @@ Crear archivo `.env.local`:
 NEXTAUTH_SECRET=tu_secreto_aqui
 NEXTAUTH_URL=http://localhost:3000
 
-# Admin Credentials
+# Credenciales de administrador
 ADMIN_EMAIL=admin@experienzea.com
 ADMIN_PASSWORD=tu_password_seguro_aqui
 
@@ -126,7 +126,7 @@ CLOUDFLARE_ACCESS_KEY_ID=tu_access_key
 CLOUDFLARE_SECRET_ACCESS_KEY=tu_secret_key
 R2_BUCKET_NAME=experienzea-docs
 
-# Trustless Work (opcional para testing)
+# Trustless Work (opcional para pruebas)
 NEXT_PUBLIC_TW_BASE_URL=https://dev.api.trustlesswork.com
 NEXT_PUBLIC_TW_API_KEY=tu_api_key
 NEXT_PUBLIC_USDC_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA
@@ -159,107 +159,108 @@ npm run dev
 ```
 
 6. **Abrir en el navegador**
-- Landing: http://localhost:3000
-- Solicitante: http://localhost:3000/borrower
-- Admin: http://localhost:3000/company/login
+- Inicio: http://localhost:3000
+- Selector de portal: http://localhost:3000/dashboard
+- Solicitante: http://localhost:3000/solicitante
+- Administrador: http://localhost:3000/company/login
 
-## 👥 Credenciales de Demo
+## 👥 Credenciales de Demostración
 
-### Admin
+### Administrador
 - Configura en `.env.local`:
-  - `ADMIN_EMAIL` (default: admin@experienzea.com)
-  - `ADMIN_PASSWORD` (tu password seguro)
+  - `ADMIN_EMAIL` (predeterminado: admin@experienzea.com)
+  - `ADMIN_PASSWORD` (tu contraseña segura)
 
 ### Solicitante
-- Conectar con cualquier wallet Freighter (Stellar Testnet)
+- Conectar con cualquier billetera Freighter (Stellar Testnet)
 
 ## 📝 Estructura del Proyecto
 
 ```
 experienzea/
-├── app/                    # Next.js frontend
-│   ├── api/              # API Routes
+├── app/                    # Interfaz Next.js
+│   ├── api/              # Rutas API
 │   │   ├── assets/       # CRUD de activos
 │   │   ├── auth/         # NextAuth
 │   │   ├── download/     # Descarga de documentos
-│   │   └── upload/       # Upload a R2
-│   ├── borrower/         # Dashboard del solicitante
+│   │   └── upload/       # Carga de archivos a R2
+│   ├── solicitante/      # Panel del solicitante
 │   ├── company/          # Panel de admin
 │   │   ├── dashboard/
 │   │   └── login/
-│   ├── components/       # Providers
+│   ├── components/       # Proveedores
 │   ├── dashboard/        # Selector de rol
 │   ├── globals.css
 │   ├── layout.tsx
-│   └── page.tsx          # Landing
+│   └── page.tsx          # Inicio
 ├── components/           # Componentes reutilizables
 │   ├── FileUpload.tsx
 │   ├── LoanCalculator.tsx
 │   └── LottieHero.tsx
-├── contracts/            # Smart Contracts (Rust/Soroban)
+├── contracts/            # Contratos inteligentes (Rust/Soroban)
 │   └── asset-nft/        # Contrato NFT para tokenizar activos
 │       ├── src/
 │       │   ├── lib.rs    # Código del contrato
-│       │   └── test.rs   # Tests
+│       │   └── test.rs   # Pruebas
 │       └── Cargo.toml
 ├── hooks/
-│   └── useWallet.ts      # Hook para Freighter
+│   └── useWallet.ts      # Hook de Freighter
 ├── lib/
-│   ├── db.ts             # Mock DB (desarrollo)
+│   ├── db.ts             # Base de datos simulada (desarrollo)
 │   ├── r2.ts             # Configuración R2
 │   └── supabase.ts       # Cliente Supabase
 ├── scripts/              # Scripts de utilidad
-│   └── deploy-nft.sh     # Deploy del contrato NFT
+│   └── deploy-nft.sh     # Despliegue del contrato NFT
 ├── types/
 │   └── next-auth.d.ts    # Tipos de NextAuth
-└── public/               # Assets estáticos
+└── public/               # Recursos estáticos
 ```
 
 ## 🔒 Seguridad
 
-- **Autenticación dual**: NextAuth para admin, wallet para solicitantes
-- **Privacidad multiusuario**: Cada solicitante solo ve sus activos (filtrado por wallet)
+- **Autenticación dual**: NextAuth para administrador, wallet para solicitantes
+- **Privacidad multiusuario**: Cada solicitante solo ve sus activos (filtrado por billetera)
 - **Documentos protegidos**: URLs firmadas de Cloudflare R2 (expiran en 1 hora)
-- **Verificación obligatoria**: Admin debe ver documentos antes de aprobar
+- **Verificación obligatoria**: El administrador debe ver documentos antes de aprobar
 
 ## 🌐 Despliegue en Vercel
 
 1. **Conectar repositorio** en Vercel
-2. **Agregar variables de entorno** en Settings → Environment Variables
-3. **Configurar dominio** (opcional): Settings → Domains
-4. **Deploy automático** en cada push a `main`
+2. **Agregar variables de entorno** en Configuración → Variables de Entorno
+3. **Configurar dominio** (opcional): Configuración → Dominios
+4. **Despliegue automático** en cada envío a `main`
 
-## 🧪 Testing
+## 🧪 Pruebas
 
 ### Flujo completo de prueba:
-1. Ir a `/borrower` y conectar wallet
+1. Ir a `/dashboard`, elegir "Soy Solicitante" y conectar billetera
 2. Crear solicitud con documentos
 3. Ir a `/company/login` e ingresar como admin
-4. Ver documentos, marcar checkbox y aprobar
+4. Ver documentos, marcar casilla y aprobar
 5. Tokenizar activo
 6. Crear escrow
 7. Enviar fondos
-8. Verificar estado en dashboard del solicitante
+8. Verificar estado en panel del solicitante
 
 ## 🤝 Contribuir
 
-1. Fork el repositorio
-2. Crear rama feature: `git checkout -b feature/nueva-funcionalidad`
-3. Commit cambios: `git commit -am 'Agregar nueva funcionalidad'`
-4. Push a la rama: `git push origin feature/nueva-funcionalidad`
-5. Crear Pull Request
+1. Hacer fork del repositorio
+2. Crear rama de funcionalidad: `git checkout -b feature/nueva-funcionalidad`
+3. Crear commit de cambios: `git commit -am 'Agregar nueva funcionalidad'`
+4. Subir la rama: `git push origin feature/nueva-funcionalidad`
+5. Crear una solicitud de extracción
 
 ## 📄 Licencia
 
-MIT License - ver [LICENSE](LICENSE) para detalles.
+Licencia MIT - ver [LICENSE](LICENSE) para más detalles.
 
 ## 🙏 Agradecimientos
 
-- [Stellar](https://stellar.org) - Blockchain infrastructure
-- [Trustless Work](https://trustlesswork.com) - Escrow smart contracts
-- [Freighter](https://freighter.app) - Stellar wallet
-- [Supabase](https://supabase.com) - Database & Auth
-- [Vercel](https://vercel.com) - Hosting
+- [Stellar](https://stellar.org) - Infraestructura blockchain
+- [Trustless Work](https://trustlesswork.com) - Contratos inteligentes de escrow
+- [Freighter](https://freighter.app) - Billetera de Stellar
+- [Supabase](https://supabase.com) - Base de datos y autenticación
+- [Vercel](https://vercel.com) - Alojamiento
 
 ---
 
@@ -271,11 +272,13 @@ MIT License - ver [LICENSE](LICENSE) para detalles.
 
 Este proyecto fue desarrollado como parte del **Impacta Bootcamp** de Stellar blockchain.
 
-**Mentor:** [Caleb Pactrick](https://github.com/zkCaleb-dev)  
-**Repositorio de ejemplos:** [ImpactaBootcamp-ExampleRepos](https://github.com/zkCaleb-dev/ImpactaBootcamp-ExampleRepos)
+Queremos agradecer especialmente al **equipo de Trustless Work** por el acompañamiento durante el proceso:
+- soporte técnico rápido y claro
+- excelente disposición para responder dudas
+- guía práctica para integrar el flujo de escrow en Stellar
 
 Tecnologías aplicadas:
 - ✅ Stellar Blockchain (Testnet)
-- ✅ Soroban Smart Contracts
+- ✅ Contratos inteligentes en Soroban
 - ✅ Trustless Work Escrow
-- ✅ Freighter Wallet Integration
+- ✅ Integración con Freighter Wallet
