@@ -1396,8 +1396,15 @@ export default function CompanyDashboard() {
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         <p className="text-white font-bold font-mono">
-                                                            ${asset.value.toLocaleString()}
+                                                            $
+                                                            {(asset.status === "funding_requested" || asset.status === "funded"
+                                                                ? getLoanAmountForAsset(asset)
+                                                                : asset.value
+                                                            ).toLocaleString()}
                                                         </p>
+                                                        {(asset.status === "funding_requested" || asset.status === "funded") && (
+                                                            <p className="text-[10px] text-slate-500">Monto préstamo</p>
+                                                        )}
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         {getStatusBadge(asset.status)}
@@ -1446,8 +1453,15 @@ export default function CompanyDashboard() {
                                             </div>
                                                 <div className="text-right">
                                                     <p className="text-lg font-bold text-white font-[family-name:var(--font-syne)]">
-                                                        ${asset.value.toLocaleString()}
+                                                        $
+                                                        {(asset.status === "funding_requested" || asset.status === "funded"
+                                                            ? getLoanAmountForAsset(asset)
+                                                            : asset.value
+                                                        ).toLocaleString()}
                                                     </p>
+                                                    {(asset.status === "funding_requested" || asset.status === "funded") && (
+                                                        <p className="text-[10px] text-slate-500">Monto préstamo</p>
+                                                    )}
                                                 </div>
                                             </div>
 

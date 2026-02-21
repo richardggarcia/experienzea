@@ -299,10 +299,20 @@ export default function Dashboard() {
     // Loan Simulator State
     const [loanAmount, setLoanAmount] = useState<number>(0);
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
-    const tokenizedAssets = assets.filter(a => a.status === 'tokenized');
-    const selectedAssets = tokenizedAssets.filter(a => selectedAssetIds.has(a.id));
+    const collateralEligibleAssets = assets.filter(
+        (a) => a.status === "tokenized" || a.status === "funded"
+    );
+    const selectedAssets = collateralEligibleAssets.filter(a => selectedAssetIds.has(a.id));
     const totalAssetValue = selectedAssets.reduce((sum, asset) => sum + asset.value, 0);
-    const maxCreditLimit = totalAssetValue * 0.7; // 70% LTV
+    const committedAmountOnSelection = useMemo(() => {
+        if (selectedAssetIds.size === 0) return 0;
+        return loanRequests
+            .filter((loan) => ["pending", "approved", "escrow_created", "funded"].includes(loan.status))
+            .filter((loan) => (loan.asset_ids || []).some((id) => selectedAssetIds.has(id)))
+            .reduce((sum, loan) => sum + (loan.amount_requested || 0), 0);
+    }, [loanRequests, selectedAssetIds]);
+    const availableCollateralValue = Math.max(0, totalAssetValue - committedAmountOnSelection);
+    const maxCreditLimit = availableCollateralValue * 0.7; // 70% LTV sobre colateral disponible
     const escrowActionOwnerByAssetId = useMemo(
         () => buildEscrowActionOwnerMap(assets),
         [assets]
@@ -341,10 +351,10 @@ export default function Dashboard() {
     };
 
     const toggleAllAssets = () => {
-        if (selectedAssetIds.size === tokenizedAssets.length) {
+        if (selectedAssetIds.size === collateralEligibleAssets.length) {
             setSelectedAssetIds(new Set());
         } else {
-            setSelectedAssetIds(new Set(tokenizedAssets.map(a => a.id)));
+            setSelectedAssetIds(new Set(collateralEligibleAssets.map(a => a.id)));
         }
         setLoanAmount(0);
     };
@@ -530,6 +540,22 @@ export default function Dashboard() {
             }
         }
         return loanAmountByAssetId.get(asset.id) ?? asset.value;
+    };
+
+    const getCollateralTotalForAsset = (asset: Asset) => {
+        const grouped = escrowGroupedAssetsByLeaderId.get(asset.id);
+        if (grouped && grouped.length > 0) {
+            return grouped.reduce((sum, item) => sum + item.value, 0);
+        }
+        return asset.value;
+    };
+
+    const getCollateralNamesForAsset = (asset: Asset) => {
+        const grouped = escrowGroupedAssetsByLeaderId.get(asset.id);
+        if (grouped && grouped.length > 0) {
+            return grouped.map((item) => item.name).join(", ");
+        }
+        return asset.name;
     };
 
     const handleFirmarAcuerdo = async (asset: Asset, attempt = 1) => {
@@ -816,8 +842,15 @@ export default function Dashboard() {
                                         <p className="text-slate-500 text-sm mb-4 font-mono">Titular: {asset.owner}</p>
 
                                         <div className="bg-slate-950 border border-white/[0.05] rounded-xl p-4 mb-6">
-                                            <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider">Valor Estimado</p>
-                                            <p className="text-2xl font-bold text-white font-[family-name:var(--font-syne)]">${asset.value.toLocaleString()}</p>
+                                            <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider">
+                                                {(asset.status === "funding_requested" || asset.status === "funded") &&
+                                                (escrowGroupedAssetsByLeaderId.get(asset.id)?.length || 0) > 1
+                                                    ? "Valor Estimado Total (Garantías)"
+                                                    : "Valor Estimado"}
+                                            </p>
+                                            <p className="text-2xl font-bold text-white font-[family-name:var(--font-syne)]">
+                                                ${getCollateralTotalForAsset(asset).toLocaleString()}
+                                            </p>
                                         </div>
                                         {(asset.status === "funding_requested" || asset.status === "funded") && (
                                             <div className="bg-slate-950 border border-emerald-500/20 rounded-xl p-4 mb-6">
@@ -960,10 +993,10 @@ export default function Dashboard() {
                         </div>
                         <h2 className="text-3xl md:text-4xl font-bold mb-4 font-[family-name:var(--font-syne)] text-white">Solicitud de Liquidez</h2>
 
-                        {tokenizedAssets.length === 0 ? (
+                        {collateralEligibleAssets.length === 0 ? (
                             <>
                                 <p className="text-slate-400 mb-8 font-[family-name:var(--font-manrope)] text-lg leading-relaxed max-w-2xl px-4">
-                                    Aún no tienes garantías aprobadas y tokenizadas. Una vez que el equipo de riesgo apruebe tus garantías, podrás solicitar hasta el <strong>70%</strong> de su valor como préstamo al instante.
+                                    Aún no tienes garantías disponibles para respaldar un nuevo préstamo. Necesitas garantías tokenizadas o con saldo disponible.
                                 </p>
                                 <button
                                     onClick={() => setActiveTab('garantias')}
@@ -982,11 +1015,11 @@ export default function Dashboard() {
                                             onClick={toggleAllAssets}
                                             className="text-xs text-orange-400 hover:text-orange-300 font-bold transition-colors"
                                         >
-                                            {selectedAssetIds.size === tokenizedAssets.length ? 'Deseleccionar todas' : 'Seleccionar todas'}
+                                            {selectedAssetIds.size === collateralEligibleAssets.length ? 'Deseleccionar todas' : 'Seleccionar todas'}
                                         </button>
                                     </div>
                                     <div className="space-y-3">
-                                        {tokenizedAssets.map(asset => (
+                                        {collateralEligibleAssets.map(asset => (
                                             <label
                                                 key={asset.id}
                                                 className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all ${selectedAssetIds.has(asset.id)
@@ -1019,12 +1052,15 @@ export default function Dashboard() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
                                     <div className="bg-[#0b1021] border border-white/[0.05] p-6 rounded-2xl">
-                                        <h3 className="text-xs font-bold text-slate-500 mb-2 font-[family-name:var(--font-syne)]">RESPALDO SELECCIONADO ({selectedAssets.length}/{tokenizedAssets.length})</h3>
+                                        <h3 className="text-xs font-bold text-slate-500 mb-2 font-[family-name:var(--font-syne)]">RESPALDO SELECCIONADO ({selectedAssets.length}/{collateralEligibleAssets.length})</h3>
                                         <p className="text-3xl font-bold text-white">{formatCurrency(totalAssetValue)}</p>
                                     </div>
                                     <div className="bg-orange-500/10 border border-orange-500/20 p-6 rounded-2xl shadow-[0_0_30px_rgba(249,115,22,0.05)]">
-                                        <h3 className="text-xs font-bold text-orange-500 mb-2 font-[family-name:var(--font-syne)]">LÍMITE DE CRÉDITO (70% LTV)</h3>
+                                        <h3 className="text-xs font-bold text-orange-500 mb-2 font-[family-name:var(--font-syne)]">LÍMITE DE CRÉDITO DISPONIBLE (70% LTV)</h3>
                                         <p className="text-3xl font-bold text-orange-400">{formatCurrency(maxCreditLimit)}</p>
+                                        <p className="text-xs text-orange-200/80 mt-2">
+                                            Comprometido: {formatCurrency(committedAmountOnSelection)} · Disponible: {formatCurrency(availableCollateralValue)}
+                                        </p>
                                     </div>
                                 </div>
 
@@ -1408,7 +1444,7 @@ export default function Dashboard() {
                                     </div>
                                     <div className="bg-slate-950 p-5 rounded-[1.5rem] border border-white/[0.05]">
                                         <p className="text-xs text-slate-500 uppercase tracking-wider mb-2 font-bold">Tasa Anual</p>
-                                        <p className="text-2xl font-bold text-blue-400 font-[family-name:var(--font-syne)]">10% APR</p>
+                                        <p className="text-2xl font-bold text-blue-400 font-[family-name:var(--font-syne)]">A definir</p>
                                     </div>
                                 </div>
 
@@ -1417,7 +1453,7 @@ export default function Dashboard() {
                                         <ShieldCheck className="w-5 h-5" /> Política de Garantía (NFT)
                                     </h4>
                                     <p className="text-sm text-slate-300 leading-relaxed text-justify font-[family-name:var(--font-manrope)]">
-                                        Al aceptar este contrato, el NFT representativo de su activo <strong className="text-white font-[family-name:var(--font-syne)]">({termsModalState.asset.name})</strong> quedará bloqueado en un contrato inteligente de garantía.
+                                        Al aceptar este contrato, el NFT representativo de su activo <strong className="text-white font-[family-name:var(--font-syne)]">({getCollateralNamesForAsset(termsModalState.asset)})</strong> quedará bloqueado en un contrato inteligente de garantía.
                                         En caso de incumplimiento de pago a la fecha de vencimiento, la propiedad digital del activo pasará a ExperienZea o sus inversores para la liquidación correspondiente.
                                     </p>
                                 </div>
