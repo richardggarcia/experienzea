@@ -2,28 +2,17 @@
 
 import { SessionProvider } from "next-auth/react";
 import { ReactNode } from "react";
-import { TrustlessWorkConfig, development, mainNet, baseURL } from "@trustless-work/escrow";
+import { TrustlessWorkConfig, baseURL } from "@trustless-work/escrow";
 
 export function Providers({ children }: { children: ReactNode }) {
-    const resolveBaseURL = (): baseURL => {
-        const envBaseURL = process.env.NEXT_PUBLIC_TW_BASE_URL;
-        if (envBaseURL === mainNet || envBaseURL === development) {
-            return envBaseURL;
-        }
-        return development;
-    };
-
-    const baseURL = resolveBaseURL();
-    const apiKey = process.env.NEXT_PUBLIC_TW_API_KEY || "";
-
-    // Log de advertencia si falta la API Key
-    if (!apiKey && typeof window !== 'undefined') {
-        console.warn("⚠️  NEXT_PUBLIC_TW_API_KEY no está configurada. La integración con Trustless Work no funcionará.");
-    }
+    // The SDK type only allows official TW URLs, but runtime accepts same-origin proxy.
+    const twProxyBaseURL = "/api/tw" as unknown as baseURL;
+    // Never expose Trustless Work API keys in the browser.
+    const apiKey = "";
 
     return (
         <SessionProvider>
-            <TrustlessWorkConfig baseURL={baseURL} apiKey={apiKey}>
+            <TrustlessWorkConfig baseURL={twProxyBaseURL} apiKey={apiKey}>
                 {children}
             </TrustlessWorkConfig>
         </SessionProvider>

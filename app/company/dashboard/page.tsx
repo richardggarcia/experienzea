@@ -283,6 +283,32 @@ export default function CompanyDashboard() {
             });
         });
     };
+    const getTrustlessWorkErrorMessage = (error: unknown, fallback: string) => {
+        const err = error as {
+            response?: {
+                status?: number;
+                data?: { message?: string; request_id?: string; requestId?: string };
+            };
+        };
+
+        const status = err?.response?.status;
+        const message = err?.response?.data?.message;
+        const requestId = err?.response?.data?.request_id || err?.response?.data?.requestId;
+
+        if (status === 502) {
+            return requestId
+                ? `Trustless Work no respondió (502). Intenta de nuevo en unos minutos. ID: ${requestId}`
+                : "Trustless Work no respondió (502). Intenta de nuevo en unos minutos.";
+        }
+
+        if (status && message) {
+            return requestId
+                ? `Error Trustless Work (${status}): ${message}. ID: ${requestId}`
+                : `Error Trustless Work (${status}): ${message}`;
+        }
+
+        return fallback;
+    };
 
     const signAndSendXdr = async (unsignedXdr: string) => {
         // Verificar que Freighter esté en Testnet
@@ -485,6 +511,58 @@ export default function CompanyDashboard() {
             setIsDeletingLoanRequestId(null);
         }
     };
+    const handleClearStuckEscrow = async (asset: Asset) => {
+        const confirmed = await requestConfirm(
+            "¿Limpiar este escrow atascado en modo prueba? Se eliminará la solicitud vinculada y las garantías volverán a tokenizadas.",
+            "Limpiar escrow atascado"
+        );
+        if (!confirmed) return;
+
+        setIsProcessing(asset.id);
+        try {
+            const contractId = asset.contractId || asset.contract_id;
+
+            const relatedAssets = contractId
+                ? assets.filter((item) => (item.contractId || item.contract_id) === contractId)
+                : [asset];
+
+            const relatedAssetIds = new Set(relatedAssets.map((item) => item.id));
+            const relatedLoans = loanRequests.filter((loan) => {
+                if (contractId && loan.contract_id === contractId) return true;
+                return (loan.asset_ids || []).some((id) => relatedAssetIds.has(id));
+            });
+
+            await Promise.all(
+                relatedAssets.map((item) =>
+                    fetch(`/api/assets/${item.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            status: "tokenized",
+                            contract_id: null,
+                        }),
+                    })
+                )
+            );
+
+            await Promise.all(
+                relatedLoans.map((loan) =>
+                    fetch(`/api/loan-requests/${loan.id}?force=1`, {
+                        method: "DELETE",
+                    })
+                )
+            );
+
+            await fetchAssets();
+            await fetchLoanRequests();
+            showAlert("Escrow atascado limpiado en modo prueba.", "Listo");
+        } catch (error) {
+            console.error("Error cleaning stuck escrow:", error);
+            showAlert("No se pudo limpiar el escrow atascado.");
+        } finally {
+            setIsProcessing(null);
+        }
+    };
 
     const handleCreateEscrowFromLoanRequest = async (lr: LoanRequest) => {
         if (!address) {
@@ -500,9 +578,11 @@ export default function CompanyDashboard() {
 
         setIsProcessing(lr.id);
         try {
+            // Usar un engagementId único por intento para evitar colisiones si el admin reintenta
+            const engagementId = `${lr.id}-${Date.now()}`;
             const payload = {
                 signer: address,
-                engagementId: lr.id,
+                engagementId,
                 title: `Prestamo $${lr.amount_requested.toLocaleString()} - ${lr.borrower_name}`,
                 roles: {
                     approver: address,
@@ -529,7 +609,9 @@ export default function CompanyDashboard() {
             const sendResponse = await signAndSendXdr(response.unsignedTransaction);
             if (!sendResponse || sendResponse.status !== "SUCCESS") throw new Error("Send failed");
 
-            const contractId = (response as any).contractId || await waitForEscrowContractId(address, lr.id);
+            const contractId =
+                (response as any).contractId ||
+                (await waitForEscrowContractId(address, engagementId));
             console.log("📝 Contract ID obtenido:", contractId);
 
             const lrPatchBody: any = { status: "escrow_created" };
@@ -560,9 +642,18 @@ export default function CompanyDashboard() {
             await fetchAssets();
             await fetchLoanRequests();
             showAlert("Escrow creado exitosamente", "Éxito");
-        } catch (err) {
-            console.error(err);
-            showAlert("Error creando el escrow. Revisa la consola.");
+        } catch (err: any) {
+            if (err?.response) {
+                console.error("Trustless Work: deployEscrow response", err.response.status, err.response.data);
+            } else {
+                console.error("Error creando escrow:", err);
+            }
+            showAlert(
+                getTrustlessWorkErrorMessage(
+                    err,
+                    "Error creando el escrow. Revisa la consola."
+                )
+            );
         } finally {
             setIsProcessing(null);
         }
@@ -887,11 +978,6 @@ export default function CompanyDashboard() {
             return;
         }
 
-        if (!process.env.NEXT_PUBLIC_TW_API_KEY) {
-            showAlert("Falta configurar NEXT_PUBLIC_TW_API_KEY en .env.local");
-            return;
-        }
-
         setIsProcessing(asset.id);
         try {
             const payload = {
@@ -956,7 +1042,12 @@ export default function CompanyDashboard() {
             const err = error as { response?: { status?: number; data?: unknown } };
             if (err?.response) {
                 console.error("Trustless Work: deployEscrow response", err.response.status, err.response.data);
-                showAlert(`Error creando el escrow. Status ${err.response.status}`);
+                showAlert(
+                    getTrustlessWorkErrorMessage(
+                        err,
+                        `Error creando el escrow. Status ${err.response.status}`
+                    )
+                );
             } else {
                 console.error("Error:", error);
                 showAlert("Error creando el escrow. Revisá la consola.");
@@ -1361,18 +1452,32 @@ export default function CompanyDashboard() {
                         }
                     })()}
                     {isEscrowActionOwner(asset) ? (
-                        <button
-                            onClick={() => handleSendFunds(asset)}
-                            disabled={isProcessing === asset.id || !address}
-                            className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-lg font-bold text-sm hover:from-green-500 hover:to-emerald-400 transition-all shadow-lg shadow-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                        >
-                            {isProcessing === asset.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                                <Check className="w-4 h-4" />
-                            )}
-                            Enviar Fondos
-                        </button>
+                        <>
+                            <button
+                                onClick={() => handleSendFunds(asset)}
+                                disabled={isProcessing === asset.id || !address}
+                                className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-lg font-bold text-sm hover:from-green-500 hover:to-emerald-400 transition-all shadow-lg shadow-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                {isProcessing === asset.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <Check className="w-4 h-4" />
+                                )}
+                                Enviar Fondos
+                            </button>
+                            <button
+                                onClick={() => handleClearStuckEscrow(asset)}
+                                disabled={isProcessing === asset.id}
+                                className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 rounded-lg font-bold text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                {isProcessing === asset.id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                    <Trash2 className="w-3 h-3" />
+                                )}
+                                Limpiar escrow atascado
+                            </button>
+                        </>
                     ) : (
                         <span className="text-xs text-slate-400">
                             Este escrow se gestiona desde otra garantía del mismo préstamo.
@@ -1422,23 +1527,23 @@ export default function CompanyDashboard() {
                     <div className="flex items-center gap-2 md:gap-4">
                         {/* 💰 Balance USDC */}
                         {address && walletBalance !== null && (
-                            <span className="hidden sm:flex items-center gap-2 text-[10px] md:text-xs bg-blue-500/10 text-blue-400 px-3 py-1.5 md:px-4 md:py-2 rounded-full font-mono border border-blue-500/20">
-                                <Coins className="w-3 h-3" />
+                            <span className="hidden sm:flex items-center gap-2 text-[10px] md:text-xs bg-slate-800/60 text-slate-300 px-3 py-1.5 md:px-4 md:py-2 rounded-full font-mono border border-white/[0.06]">
+                                <Coins className="w-3 h-3 text-slate-400" />
                                 {walletBalance.toLocaleString()} USDC
                             </span>
                         )}
 
                         {/* Wallet de la Empresa */}
                         {address ? (
-                            <span className="flex items-center gap-2 text-[10px] md:text-xs bg-green-500/10 text-green-400 px-3 py-1.5 md:px-4 md:py-2 rounded-full font-mono border border-green-500/20">
-                                <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <span className="flex items-center gap-2 text-[10px] md:text-xs bg-slate-800/60 text-slate-300 px-3 py-1.5 md:px-4 md:py-2 rounded-full font-mono border border-white/[0.06]">
+                                <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-blue-500 rounded-full"></div>
                                 {address.substring(0, 4)}...{address.substring(address.length - 4)}
                             </span>
                         ) : (
                             <button
                                 onClick={() => connect()}
                                 disabled={isConnecting}
-                                className="flex items-center gap-2 text-[10px] md:text-xs bg-blue-500/10 text-blue-400 px-3 py-1.5 md:px-4 md:py-2 rounded-full font-mono border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+                                className="flex items-center gap-2 text-[10px] md:text-xs bg-slate-800/60 text-slate-300 px-3 py-1.5 md:px-4 md:py-2 rounded-full font-mono border border-white/[0.06] hover:bg-slate-700/60 transition-colors"
                             >
                                 <Wallet className="w-3 h-3" />
                                 {isConnecting ? "..." : "Conectar"}
@@ -1468,32 +1573,36 @@ export default function CompanyDashboard() {
             <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8 relative z-10">
                 {/* Stats Grid - Responsive */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
-                    <div className="bg-slate-900/50 p-4 md:p-5 rounded-2xl border border-white/[0.05] group hover:border-blue-500/20 transition-all">
-                        <p className="text-yellow-500 text-2xl md:text-3xl font-bold font-[family-name:var(--font-syne)]">
+                    <div className="bg-slate-900/50 p-4 md:p-5 rounded-2xl border border-white/[0.04] relative overflow-hidden transition-all hover:border-yellow-500/20">
+                        <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-yellow-500/60 to-transparent" />
+                        <p className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-syne)] text-white">
                             {pendingCount}
                         </p>
                         <p className="text-slate-500 text-[10px] md:text-xs uppercase tracking-wider mt-1">
                             Pendientes
                         </p>
                     </div>
-                    <div className="bg-slate-900/50 p-4 md:p-5 rounded-2xl border border-white/[0.05] group hover:border-blue-500/20 transition-all">
-                        <p className="text-blue-500 text-2xl md:text-3xl font-bold font-[family-name:var(--font-syne)]">
+                    <div className="bg-slate-900/50 p-4 md:p-5 rounded-2xl border border-white/[0.04] relative overflow-hidden transition-all hover:border-blue-500/20">
+                        <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-blue-500/60 to-transparent" />
+                        <p className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-syne)] text-white">
                             {approvedCount}
                         </p>
                         <p className="text-slate-500 text-[10px] md:text-xs uppercase tracking-wider mt-1">
                             Aprobados
                         </p>
                     </div>
-                    <div className="bg-slate-900/50 p-4 md:p-5 rounded-2xl border border-white/[0.05] group hover:border-blue-500/20 transition-all">
-                        <p className="text-purple-500 text-2xl md:text-3xl font-bold font-[family-name:var(--font-syne)]">
+                    <div className="bg-slate-900/50 p-4 md:p-5 rounded-2xl border border-white/[0.04] relative overflow-hidden transition-all hover:border-blue-500/20">
+                        <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-blue-500/40 to-transparent" />
+                        <p className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-syne)] text-white">
                             {tokenizedCount}
                         </p>
                         <p className="text-slate-500 text-[10px] md:text-xs uppercase tracking-wider mt-1">
                             NFTs emitidos
                         </p>
                     </div>
-                    <div className="bg-slate-900/50 p-4 md:p-5 rounded-2xl border border-white/[0.05] group hover:border-blue-500/20 transition-all">
-                        <p className="text-green-500 text-2xl md:text-3xl font-bold font-[family-name:var(--font-syne)]">
+                    <div className="bg-slate-900/50 p-4 md:p-5 rounded-2xl border border-white/[0.04] relative overflow-hidden transition-all hover:border-emerald-500/20">
+                        <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-emerald-500/60 to-transparent" />
+                        <p className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-syne)] text-white">
                             {fundedCount}
                         </p>
                         <p className="text-slate-500 text-[10px] md:text-xs uppercase tracking-wider mt-1">
@@ -1514,8 +1623,9 @@ export default function CompanyDashboard() {
                                     Garantías y préstamos en una sola vista por usuario
                                 </p>
                             </div>
-                            <div className="inline-flex items-center gap-2 rounded-full bg-orange-500/10 text-orange-300 border border-orange-500/20 px-3 py-1 text-xs font-semibold">
-                                <Coins className="w-4 h-4" /> {assets.filter((a) => a.status === "pending_review").length + loanRequests.filter((lr) => isPendingLoan(lr.status)).length} pendientes
+                            <div className="inline-flex items-center gap-2 rounded-full bg-slate-800/60 text-slate-400 border border-white/[0.06] px-3 py-1 text-xs font-semibold">
+                                <div className="w-1.5 h-1.5 rounded-full bg-yellow-500"></div>
+                                {assets.filter((a) => a.status === "pending_review").length + loanRequests.filter((lr) => isPendingLoan(lr.status)).length} pendientes
                             </div>
                         </div>
                     </div>
@@ -1542,7 +1652,7 @@ export default function CompanyDashboard() {
                                         {/* Izquierda: Info de usuario y resumen */}
                                         <div className="flex-1">
                                             <div className="flex items-center gap-4 mb-3">
-                                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg border border-white/10 uppercase">
+                                                <div className="w-12 h-12 rounded-full bg-slate-800 border border-white/[0.08] flex items-center justify-center text-white font-bold text-sm font-[family-name:var(--font-syne)] uppercase tracking-wider">
                                                     {borrower.borrowerName.substring(0, 2)}
                                                 </div>
                                                 <div>
@@ -1555,20 +1665,20 @@ export default function CompanyDashboard() {
                                                 </div>
                                             </div>
 
-                                            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                                            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                                                 <span className="flex items-center gap-1">
-                                                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                                                    <ShieldCheck className="w-3.5 h-3.5 text-slate-500" />
                                                     {borrower.assets.length} Garantías
                                                 </span>
                                                 <span className="w-1 h-1 rounded-full bg-slate-700"></span>
                                                 <span className="flex items-center gap-1">
-                                                    <FileText className="w-4 h-4 text-orange-400" />
+                                                    <FileText className="w-3.5 h-3.5 text-slate-500" />
                                                     {borrower.loans.length} Solicitudes
                                                 </span>
                                                 {borrower.pendingCount > 0 && (
                                                     <>
                                                         <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                                                        <span className="text-yellow-500 font-medium">
+                                                        <span className="text-yellow-500/80 font-medium">
                                                             {borrower.pendingCount} pendientes
                                                         </span>
                                                     </>
@@ -1581,8 +1691,8 @@ export default function CompanyDashboard() {
                                             <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-1">
                                                 Total Solicitado
                                             </p>
-                                            <div className="text-3xl font-bold font-[family-name:var(--font-syne)] text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
-                                                $ {borrower.totalRequested.toLocaleString()} <span className="text-lg opacity-60">USD</span>
+                                            <div className="text-3xl font-bold font-[family-name:var(--font-syne)] text-white">
+                                                $ {borrower.totalRequested.toLocaleString()} <span className="text-base text-slate-500 font-normal">USD</span>
                                             </div>
                                         </div>
                                     </div>
@@ -1598,21 +1708,21 @@ export default function CompanyDashboard() {
                                                 const normalizedLoanStatus = normalizeLoanStatus(lr.status);
                                                 const isPending = isPendingLoan(normalizedLoanStatus);
                                                 const isFunded = normalizedLoanStatus === "funded";
-                                                const dotColor = isPending ? "bg-yellow-500" : isFunded ? "bg-emerald-500" : "bg-purple-500";
+                                                const dotColor = isPending ? "bg-yellow-500" : isFunded ? "bg-emerald-500" : "bg-blue-500";
                                                 const statusText = isPending ? "En revisión / Pendiente" : normalizedLoanStatus === "approved" ? "Aprobado" : normalizedLoanStatus === "escrow_created" ? "Escrow Creado" : "Préstamo Acreditado";
 
                                                 return (
-                                                    <div key={lr.id} className="bg-slate-900/40 rounded-xl p-4 border border-white/[0.03] hover:border-white/[0.08] transition-colors relative overflow-hidden group">
-                                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-orange-500/50 to-amber-500/50 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                                                    <div key={lr.id} className="bg-slate-900/40 rounded-xl p-4 border border-white/[0.04] hover:border-white/[0.08] transition-colors relative overflow-hidden group">
+                                                        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-white/[0.08] group-hover:bg-white/[0.15] transition-colors"></div>
 
-                                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pl-2">
+                                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pl-3">
                                                             <div>
                                                                 <div className="flex items-center gap-2 mb-1">
                                                                     <span className="text-sm font-bold text-white flex items-center gap-2">
-                                                                        <Rocket className="w-4 h-4 text-orange-400" />
+                                                                        <Rocket className="w-4 h-4 text-slate-400" />
                                                                         Préstamo por $ {lr.amount_requested.toLocaleString()} USD
                                                                     </span>
-                                                                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-white/[0.05] bg-slate-950 text-[10px] font-semibold text-slate-300">
+                                                                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-white/[0.05] bg-slate-950 text-[10px] font-semibold text-slate-400">
                                                                         <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`}></span>
                                                                         {statusText}
                                                                     </span>
@@ -1626,8 +1736,8 @@ export default function CompanyDashboard() {
                                                                 {lrAssets.length > 0 && (
                                                                     <div className="flex gap-2 mt-3 flex-wrap">
                                                                         {lrAssets.map((a) => (
-                                                                            <span key={a.id} className="text-[10px] bg-slate-800 text-slate-400 px-2.5 py-1 rounded-lg border border-white/[0.05] flex items-center gap-1.5">
-                                                                                <ShieldCheck className="w-3 h-3 text-emerald-500/70" /> {a.name}
+                                                                            <span key={a.id} className="text-[10px] bg-slate-800/60 text-slate-400 px-2.5 py-1 rounded-lg border border-white/[0.04] flex items-center gap-1.5">
+                                                                                <ShieldCheck className="w-3 h-3 text-slate-500" /> {a.name}
                                                                             </span>
                                                                         ))}
                                                                     </div>
@@ -1639,7 +1749,7 @@ export default function CompanyDashboard() {
                                                                     <button
                                                                         onClick={() => handleCreateEscrowFromLoanRequest(lr)}
                                                                         disabled={isProcessing === lr.id}
-                                                                        className="flex-1 md:flex-none bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/20 px-4 py-2 rounded-xl font-bold text-xs transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                                                        className="flex-1 md:flex-none bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 px-4 py-2 rounded-xl font-bold text-xs transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                                                                     >
                                                                         {isProcessing === lr.id ? (
                                                                             <><Loader2 className="w-4 h-4 animate-spin" /> Creando Escrow...</>
