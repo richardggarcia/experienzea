@@ -379,60 +379,92 @@ export default function Home() {
         </section>
 
         {/* FOOTER */}
-        <footer className="bg-[#0b1021] border-t border-white/[0.05] pt-14 pb-8">
+        <footer className="bg-[#0b1021] border-t border-white/[0.05]">
           <div className="max-w-7xl mx-auto px-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
-              <div className="rounded-2xl border border-white/[0.06] bg-slate-900/40 p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-500/20">E</div>
-                  <span className="text-xl font-bold tracking-tight font-[family-name:var(--font-syne)] text-white">ExperienZea</span>
+
+            {/* Main footer grid */}
+            <div className="py-16 grid grid-cols-1 md:grid-cols-12 gap-12">
+
+              {/* Brand col */}
+              <div className="md:col-span-5">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-[0_0_20px_rgba(37,99,235,0.3)]">E</div>
+                  <span className="text-lg font-bold tracking-tight font-[family-name:var(--font-syne)] text-white">ExperienZea</span>
                 </div>
-                <p className="text-slate-400 text-sm leading-relaxed max-w-xl">
-                  Liquidez respaldada por activos reales. Tokenizá, usá tu garantía y solicitá crédito con trazabilidad sobre Stellar.
+                <p className="text-slate-400 text-sm leading-relaxed mb-6 max-w-xs">
+                  Protocolo DeFi que convierte activos reales en liquidez. Tokenizá tu garantía y accedé a crédito con trazabilidad total sobre Stellar.
                 </p>
-                <div className="flex flex-wrap items-center gap-3 mt-5">
-                  <Link
-                    href="/solicitante"
-                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-500 transition-colors"
+                <Link
+                  href="/solicitante"
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-500 transition-colors shadow-[0_0_20px_rgba(37,99,235,0.2)]"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  Comenzar ahora
+                </Link>
+              </div>
+
+              {/* Links cols */}
+              <div className="md:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-8">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600 mb-4">Plataforma</p>
+                  <div className="space-y-3">
+                    <a href="#assets" className="block text-sm text-slate-400 hover:text-white transition-colors">Activos soportados</a>
+                    <a href="#calculator" className="block text-sm text-slate-400 hover:text-white transition-colors">Simulador de crédito</a>
+                    <a href="#why-us" className="block text-sm text-slate-400 hover:text-white transition-colors">Cómo funciona</a>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600 mb-4">Portales</p>
+                  <div className="space-y-3">
+                    <Link href="/solicitante" className="block text-sm text-slate-400 hover:text-white transition-colors">Solicitante</Link>
+                    <Link href="/company/login" className="block text-sm text-slate-400 hover:text-white transition-colors">Administrador</Link>
+                    <span className="block text-sm text-slate-600">Inversor · Próximamente</span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600 mb-4">Legal</p>
+                  <div className="space-y-3">
+                    <a href="#" className="block text-sm text-slate-400 hover:text-white transition-colors">Términos de uso</a>
+                    <a href="#" className="block text-sm text-slate-400 hover:text-white transition-colors">Privacidad</a>
+                    <a href="#" className="block text-sm text-slate-400 hover:text-white transition-colors">Contacto</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tech stack row */}
+            <div className="py-5 border-t border-white/[0.04] flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600 shrink-0">Powered by</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {[
+                  { name: "Stellar", dot: "bg-blue-400" },
+                  { name: "Soroban", dot: "bg-indigo-400" },
+                  { name: "Trustless Work", dot: "bg-cyan-400" },
+                  { name: "Freighter", dot: "bg-purple-400" },
+                  { name: "Supabase", dot: "bg-emerald-400" },
+                ].map((tech) => (
+                  <span
+                    key={tech.name}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/60 border border-white/[0.05] text-[11px] text-slate-400 font-mono"
                   >
-                    Portal Solicitante
-                  </Link>
-                  <span className="inline-flex items-center rounded-lg border border-white/[0.1] bg-slate-950 px-4 py-2 text-sm font-bold text-slate-500">
-                    Portal Inversor · Próximamente
+                    <span className={`w-1.5 h-1.5 rounded-full ${tech.dot}`}></span>
+                    {tech.name}
                   </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="rounded-2xl border border-white/[0.06] bg-slate-900/30 p-6">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 mb-4">Plataforma</p>
-                  <div className="space-y-3">
-                    <a href="#assets" className="block text-sm text-slate-300 hover:text-blue-400 transition-colors">Activos soportados</a>
-                    <a href="#calculator" className="block text-sm text-slate-300 hover:text-blue-400 transition-colors">Simulador de crédito</a>
-                    <a href="#why-us" className="block text-sm text-slate-300 hover:text-blue-400 transition-colors">Cómo funciona</a>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-white/[0.06] bg-slate-900/30 p-6">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 mb-4">Legal</p>
-                  <div className="space-y-3">
-                    <a href="#" className="block text-sm text-slate-300 hover:text-blue-400 transition-colors">Términos del servicio</a>
-                    <a href="#" className="block text-sm text-slate-300 hover:text-blue-400 transition-colors">Política de privacidad</a>
-                    <a href="#" className="block text-sm text-slate-300 hover:text-blue-400 transition-colors">Contacto</a>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
-            <div className="pt-6 border-t border-white/[0.05] flex flex-col md:flex-row justify-between items-center gap-4">
-              <p className="text-slate-500 text-sm">
-                © {new Date().getFullYear()} ExperienZea Protocol. Todos los derechos reservados.
+            {/* Bottom bar */}
+            <div className="py-5 border-t border-white/[0.04] flex flex-col md:flex-row justify-between items-center gap-3">
+              <p className="text-slate-600 text-xs font-mono">
+                © {new Date().getFullYear()} ExperienZea Protocol · Impacta Bootcamp · Stellar Blockchain
               </p>
-              <div className="flex items-center gap-2 text-slate-500 text-xs font-mono bg-slate-900 px-3 py-1.5 rounded-lg border border-white/[0.05]">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                Built on Stellar
+              <div className="flex items-center gap-1.5 text-slate-600 text-xs font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Testnet · En desarrollo
               </div>
             </div>
+
           </div>
         </footer>
       </main>

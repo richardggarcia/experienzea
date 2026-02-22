@@ -128,10 +128,14 @@ R2_BUCKET_NAME=experienzea-docs
 
 # Trustless Work (opcional para pruebas)
 NEXT_PUBLIC_TW_BASE_URL=https://dev.api.trustlesswork.com
-NEXT_PUBLIC_TW_API_KEY=tu_api_key
+NEXT_PUBLIC_TW_USE_PROXY=1
+TW_BASE_URL=https://dev.api.trustlesswork.com
+TW_API_KEY=tu_api_key
 NEXT_PUBLIC_USDC_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA
 NEXT_PUBLIC_USDC_SYMBOL=USDC
 ```
+
+> Recomendación de seguridad: en producción usa solo `TW_API_KEY` (servidor) y no definas `NEXT_PUBLIC_TW_API_KEY`.
 
 4. **Configurar base de datos en Supabase**
 Ejecutar en el SQL Editor de Supabase:
