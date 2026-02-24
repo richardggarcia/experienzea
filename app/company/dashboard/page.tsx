@@ -74,6 +74,11 @@ interface Asset {
         insuranceFront?: string;
         insuranceBack?: string;
         propertyTitle?: string;
+        receipt_asset_id?: string;
+        receipt_token_id?: string;
+        receipt_tx_hash?: string;
+        receipt_loan_id?: string;
+        receipt_minted_at?: string;
     };
 }
 
@@ -88,6 +93,13 @@ interface LoanRequest {
     status: string;
     contract_id?: string;
     created_at: string;
+}
+
+interface ReceiptMintInfo {
+    receiptAssetId: string;
+    receiptTokenId?: string;
+    receiptTxHash?: string;
+    receiptLoanId: string;
 }
 
 export default function CompanyDashboard() {
@@ -374,6 +386,241 @@ export default function CompanyDashboard() {
         }
 
         throw new Error("No se pudo enviar la transaccion");
+    };
+
+    const rpcRequest = async (method: string, params: Record<string, unknown>) => {
+        const response = await fetch(sorobanRpcUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                jsonrpc: "2.0",
+                id: 1,
+                method,
+                params,
+            }),
+        });
+
+        const json = await response.json();
+        if (json.error) {
+            throw new Error(json.error.message || "RPC error");
+        }
+        return json.result;
+    };
+
+    const mintNftOnContract = async (params: {
+        to: string;
+        assetId: string;
+        assetType: string;
+        value: number;
+        metadataUri: string;
+    }) => {
+        const parseScValToNative = (raw: unknown): unknown => {
+            if (!raw) return undefined;
+
+            try {
+                return StellarSdk.scValToNative(raw as StellarSdk.xdr.ScVal);
+            } catch {
+                // noop
+            }
+
+            try {
+                if (typeof raw === "string") {
+                    const scVal = StellarSdk.xdr.ScVal.fromXDR(raw, "base64");
+                    return StellarSdk.scValToNative(scVal);
+                }
+            } catch {
+                // noop
+            }
+
+            return undefined;
+        };
+
+        const server = new StellarSdk.rpc.Server(sorobanRpcUrl, {
+            allowHttp: sorobanRpcUrl.startsWith("http://"),
+        });
+
+        const account = await server.getAccount(address!);
+        const contract = new StellarSdk.Contract(nftContractId);
+        const { xdr } = StellarSdk;
+
+        const tx = new StellarSdk.TransactionBuilder(account, {
+            fee: StellarSdk.BASE_FEE,
+            networkPassphrase: testnetPassphrase,
+        })
+            .addOperation(
+                contract.call(
+                    "mint",
+                    new StellarSdk.Address(params.to).toScVal(),
+                    xdr.ScVal.scvString(params.assetId),
+                    xdr.ScVal.scvString(params.assetType),
+                    xdr.ScVal.scvU64(xdr.Uint64.fromString(String(params.value))),
+                    xdr.ScVal.scvString(params.metadataUri)
+                )
+            )
+            .setTimeout(30)
+            .build();
+
+        const prepared = await server.prepareTransaction(tx);
+        const signed = await freighter.signTransaction(prepared.toXDR(), {
+            networkPassphrase: testnetPassphrase,
+        });
+
+        const signedAny = signed as { signedTxXdr?: string; signedXDR?: string; xdr?: string };
+        const signedXdr =
+            typeof signed === "string"
+                ? signed
+                : signedAny?.signedTxXdr || signedAny?.signedXDR || signedAny?.xdr;
+
+        if (!signedXdr) {
+            throw new Error("No se pudo firmar la transacción");
+        }
+
+        const sendResponse = await rpcRequest("sendTransaction", {
+            transaction: signedXdr,
+        });
+
+        if (sendResponse?.status === "FAILED") {
+            throw new Error("La transacción falló");
+        }
+
+        const readContractScVal = async (method: string, args: StellarSdk.xdr.ScVal[] = []) => {
+            const contract = new StellarSdk.Contract(nftContractId);
+            const readAccount = await server.getAccount(address!);
+            const readTx = new StellarSdk.TransactionBuilder(readAccount, {
+                fee: StellarSdk.BASE_FEE,
+                networkPassphrase: testnetPassphrase,
+            })
+                .addOperation(contract.call(method, ...args))
+                .setTimeout(30)
+                .build();
+
+            const simulated = await server.simulateTransaction(readTx);
+            const retval = (simulated as any)?.result?.retval;
+            if (!retval) return undefined;
+
+            return parseScValToNative(retval);
+        };
+
+        const findTokenIdByAssetId = async (targetAssetId: string): Promise<string | undefined> => {
+            try {
+                const directLookup = await readContractScVal("get_token_id_by_asset_id", [
+                    StellarSdk.xdr.ScVal.scvString(targetAssetId),
+                ]);
+                if (typeof directLookup === "bigint") return directLookup.toString();
+                if (typeof directLookup === "number") return String(directLookup);
+                if (typeof directLookup === "string" && /^\d+$/.test(directLookup)) return directLookup;
+
+                const totalSupplyRaw = await readContractScVal("total_supply");
+                const totalSupply =
+                    typeof totalSupplyRaw === "bigint"
+                        ? Number(totalSupplyRaw)
+                        : Number(totalSupplyRaw || 0);
+
+                if (!Number.isFinite(totalSupply) || totalSupply <= 0) return undefined;
+
+                const minTokenId = Math.max(1, totalSupply - 60);
+                for (let tokenIdNum = totalSupply; tokenIdNum >= minTokenId; tokenIdNum -= 1) {
+                    const { xdr } = StellarSdk;
+                    const assetIdRaw = await readContractScVal("get_asset_id", [
+                        xdr.ScVal.scvU64(xdr.Uint64.fromString(String(tokenIdNum))),
+                    ]);
+                    if (typeof assetIdRaw === "string" && assetIdRaw === targetAssetId) {
+                        return String(tokenIdNum);
+                    }
+                }
+            } catch (error) {
+                console.warn("No se pudo resolver token_id por asset_id:", error);
+            }
+            return undefined;
+        };
+
+        let tokenId: string | undefined;
+        if (sendResponse?.status === "PENDING" && sendResponse?.hash) {
+            for (let attempt = 0; attempt < 10; attempt += 1) {
+                const txResponse = await rpcRequest("getTransaction", {
+                    hash: sendResponse.hash,
+                });
+
+                if (txResponse?.status === "SUCCESS") {
+                    if (txResponse.returnValue) {
+                        try {
+                            const retval = StellarSdk.xdr.ScVal.fromXDR(txResponse.returnValue, "base64");
+                            const native = StellarSdk.scValToNative(retval);
+                            if (typeof native === "bigint") tokenId = native.toString();
+                            if (typeof native === "number") tokenId = String(native);
+                            if (typeof native === "string") tokenId = native;
+                        } catch (parseError) {
+                            console.warn("No se pudo parsear returnValue de mint:", parseError);
+                        }
+                    }
+                    break;
+                }
+
+                if (txResponse?.status === "FAILED") {
+                    throw new Error("La transacción falló");
+                }
+
+                await new Promise((resolve) => setTimeout(resolve, 1200));
+            }
+        }
+
+        if (!tokenId) {
+            tokenId = await findTokenIdByAssetId(params.assetId);
+        }
+
+        return {
+            txHash: sendResponse?.hash as string | undefined,
+            tokenId,
+        };
+    };
+
+    const mintReceiptIfNeeded = async (
+        asset: Asset,
+        assetsToPatch: Asset[],
+        linkedLoan: LoanRequest | undefined
+    ): Promise<ReceiptMintInfo | null> => {
+        if (!linkedLoan || !address || !nftContractId) {
+            return null;
+        }
+
+        const existingReceipt = assetsToPatch.find(
+            (item) => item.documents?.receipt_loan_id === linkedLoan.id
+        );
+        if (existingReceipt) {
+            return {
+                receiptAssetId:
+                    existingReceipt.documents?.receipt_asset_id ||
+                    `receipt:${linkedLoan.id}:${asset.contractId || asset.contract_id || asset.id}`,
+                receiptTokenId: existingReceipt.documents?.receipt_token_id,
+                receiptTxHash: existingReceipt.documents?.receipt_tx_hash,
+                receiptLoanId: linkedLoan.id,
+            };
+        }
+
+        const borrowerWallet = linkedLoan.borrower_wallet || asset.ownerWallet || asset.owner_wallet;
+        if (!borrowerWallet) {
+            return null;
+        }
+
+        const receiptAssetId = `receipt:${linkedLoan.id}:${asset.contractId || asset.contract_id || asset.id}`;
+        const receiptMetadataUri = `${window.location.origin}/api/loan-requests?wallet=${borrowerWallet}`;
+
+        const mintResult = await mintNftOnContract({
+            to: borrowerWallet,
+            assetId: receiptAssetId,
+            assetType: "receipt",
+            value: linkedLoan.amount_requested,
+            metadataUri: receiptMetadataUri,
+        });
+
+        return {
+            receiptAssetId,
+            receiptTokenId: mintResult.tokenId,
+            receiptTxHash: mintResult.txHash,
+            receiptLoanId: linkedLoan.id,
+        };
     };
 
     const waitForEscrowContractId = async (signer: string, engagementId: string) => {
@@ -844,108 +1091,27 @@ export default function CompanyDashboard() {
             return;
         }
 
-        const borrowerWallet = asset.ownerWallet || asset.owner_wallet;
-        if (!borrowerWallet) {
-            showAlert("El solicitante no tiene wallet asociada");
-            return;
-        }
-
         setIsProcessing(id);
         try {
-            const server = new StellarSdk.rpc.Server(sorobanRpcUrl, {
-                allowHttp: sorobanRpcUrl.startsWith("http://"),
-            });
-
-            const account = await server.getAccount(address);
-            const contract = new StellarSdk.Contract(nftContractId);
             // Construir URL completa para el metadata
             const documentPath = asset.documents?.property || asset.documents?.insurance || "";
             const assetUri = documentPath
                 ? `${window.location.origin}${documentPath}`
                 : `${window.location.origin}/api/assets/${asset.id}`;
-
-            // Usar xdr directamente para tipos específicos
-            const { xdr } = StellarSdk;
-
-            const tx = new StellarSdk.TransactionBuilder(account, {
-                fee: StellarSdk.BASE_FEE,
-                networkPassphrase: testnetPassphrase,
-            })
-                .addOperation(
-                    contract.call(
-                        "mint",
-                        new StellarSdk.Address(borrowerWallet).toScVal(),
-                        xdr.ScVal.scvString(asset.id),
-                        xdr.ScVal.scvString(asset.type),
-                        xdr.ScVal.scvU64(xdr.Uint64.fromString(String(asset.value))),
-                        xdr.ScVal.scvString(assetUri)
-                    )
-                )
-                .setTimeout(30)
-                .build();
-
-            const prepared = await server.prepareTransaction(tx);
-            const signed = await freighter.signTransaction(prepared.toXDR(), {
-                networkPassphrase: testnetPassphrase,
+            const mintResult = await mintNftOnContract({
+                // NFT principal en custodia de la empresa
+                to: address,
+                assetId: asset.id,
+                assetType: asset.type,
+                value: asset.value,
+                metadataUri: assetUri,
             });
 
-            const signedAny = signed as { signedTxXdr?: string; signedXDR?: string; xdr?: string };
-            const signedXdr =
-                typeof signed === "string"
-                    ? signed
-                    : signedAny?.signedTxXdr || signedAny?.signedXDR || signedAny?.xdr;
-
-            if (!signedXdr) {
-                throw new Error("No se pudo firmar la transacción");
-            }
-
-            const rpcRequest = async (method: string, params: Record<string, unknown>) => {
-                const response = await fetch(sorobanRpcUrl, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        jsonrpc: "2.0",
-                        id: 1,
-                        method,
-                        params,
-                    }),
-                });
-
-                const json = await response.json();
-                if (json.error) {
-                    throw new Error(json.error.message || "RPC error");
-                }
-                return json.result;
-            };
-
-            const sendResponse = await rpcRequest("sendTransaction", {
-                transaction: signedXdr,
-            });
-
-            if (sendResponse?.status === "FAILED") {
-                throw new Error("La transacción falló");
-            }
-
-            if (sendResponse?.hash) {
+            if (mintResult.txHash) {
                 console.log(
                     "✅ Mint TX:",
-                    `https://stellar.expert/explorer/testnet/tx/${sendResponse.hash}`
+                    `https://stellar.expert/explorer/testnet/tx/${mintResult.txHash}`
                 );
-            }
-
-            if (sendResponse?.status === "PENDING") {
-                for (let attempt = 0; attempt < 8; attempt += 1) {
-                    const txResponse = await rpcRequest("getTransaction", {
-                        hash: sendResponse.hash,
-                    });
-                    if (txResponse?.status === "SUCCESS") break;
-                    if (txResponse?.status === "FAILED") {
-                        throw new Error("La transacción falló");
-                    }
-                    await new Promise((resolve) => setTimeout(resolve, 1200));
-                }
             }
 
             const patchResponse = await fetch(`/api/assets/${id}`, {
@@ -1273,13 +1439,35 @@ export default function CompanyDashboard() {
                 return itemContractId === contractId;
             });
             const assetsToPatch = relatedAssets.length > 0 ? relatedAssets : [asset];
+            const assetIdsInEscrow = new Set(assetsToPatch.map((item) => item.id));
+            const linkedLoanForReceipt =
+                loanRequestByContractId.get(contractId) ||
+                loanRequests.find((loan) =>
+                    (loan.asset_ids || []).some((assetId) => assetIdsInEscrow.has(assetId))
+                );
+            const receiptInfo = await mintReceiptIfNeeded(asset, assetsToPatch, linkedLoanForReceipt);
 
             await Promise.all(
                 assetsToPatch.map(async (item) => {
+                    const nextDocuments = {
+                        ...(item.documents || {}),
+                        ...(receiptInfo
+                            ? {
+                                receipt_asset_id: receiptInfo.receiptAssetId,
+                                receipt_token_id: receiptInfo.receiptTokenId,
+                                receipt_tx_hash: receiptInfo.receiptTxHash,
+                                receipt_loan_id: receiptInfo.receiptLoanId,
+                                receipt_minted_at: new Date().toISOString(),
+                            }
+                            : {}),
+                    };
                     await fetch(`/api/assets/${item.id}`, {
                         method: "PATCH",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ status: "funded" }),
+                        body: JSON.stringify({
+                            status: "funded",
+                            documents: nextDocuments,
+                        }),
                     });
                 })
             );

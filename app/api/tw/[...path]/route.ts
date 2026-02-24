@@ -19,7 +19,7 @@ const getUpstreamBaseUrl = () => {
 };
 
 const getApiKey = () => {
-    return process.env.TW_API_KEY || "";
+    return process.env.TW_API_KEY || process.env.NEXT_PUBLIC_TW_API_KEY || "";
 };
 
 const forwardRequest = async (
@@ -40,7 +40,9 @@ const forwardRequest = async (
 
     const apiKey = getApiKey();
     if (!apiKey) {
-        console.error("[TW Proxy] API key no encontrada. Configura TW_API_KEY en .env.local");
+        console.error(
+            "[TW Proxy] API key no encontrada. Configura TW_API_KEY (o NEXT_PUBLIC_TW_API_KEY como fallback local) en .env.local"
+        );
         return new Response(
             JSON.stringify({
                 error: "TW_API_KEY no configurada en el servidor",

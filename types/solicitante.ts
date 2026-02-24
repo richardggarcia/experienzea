@@ -12,6 +12,11 @@ export interface Asset {
   documents?: {
     insurance?: string;
     property?: string;
+    receipt_asset_id?: string;
+    receipt_token_id?: string;
+    receipt_tx_hash?: string;
+    receipt_loan_id?: string;
+    receipt_minted_at?: string;
   };
   created_at?: string;
 }
