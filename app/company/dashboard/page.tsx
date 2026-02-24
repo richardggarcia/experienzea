@@ -47,7 +47,17 @@ import {
 // Asset Type desde Supabase
 interface Asset {
     id: string;
-    type: "tractor" | "car" | "house";
+    type:
+    | "auto"
+    | "casa"
+    | "departamento"
+    | "tractor"
+    | "otro"
+    | "vehiculo"
+    | "inmueble"
+    | "maquinaria"
+    | "car"
+    | "house";
     name: string;
     value: number;
     owner: string;
@@ -1314,11 +1324,19 @@ export default function CompanyDashboard() {
     const getIcon = (type: Asset["type"]) => {
         switch (type) {
             case "tractor":
+            case "maquinaria":
                 return <Tractor className="w-6 h-6" />;
+            case "casa":
+            case "departamento":
+            case "inmueble":
             case "house":
                 return <Building2 className="w-6 h-6" />;
+            case "auto":
+            case "vehiculo":
             case "car":
                 return <Car className="w-6 h-6" />;
+            default:
+                return <FileText className="w-6 h-6" />;
         }
     };
 

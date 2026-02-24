@@ -4,38 +4,69 @@ import dynamic from "next/dynamic";
 
 const Lottie = dynamic(() => import("lottie-react"), { ssr: false });
 
-export default function AssetLottie({ type }: { type: string }) {
+export default function AssetLottie({
+    type,
+    context = "landing",
+}: {
+    type: string;
+    context?: "landing" | "nft";
+}) {
     const [animationData, setAnimationData] = useState(null);
 
     useEffect(() => {
-        // Updated mapping
-        let fileName = 'hero.json'; // Default (Target)
-
-        // Factory/Warehouse asset for most types
-        if (['house', 'silo', 'invoice', 'art'].includes(type)) {
-            fileName = 'factory.json';
-        }
-
-        if (type === 'farm') fileName = 'farm.json';
-
-        if (type === 'invoice') fileName = 'factory.json'; // Keep factory for invoices
-
-        if (type === 'car') fileName = 'car.json'; // Car asset now available
-        if (type === 'tractor') fileName = 'tractor.json'; // Specific tractor asset
-
-        fetch(`/lotties/${fileName}`)
-            .then(res => {
-                if (!res.ok) throw new Error("No lottie found");
-                return res.json();
-            })
-            .then(setAnimationData)
-            .catch(() => {
-                // If custom lottie fails, we might want to fail silently or show nothing
-                // But to "show off", we can just load the tractor one as placeholder if user hasn't uploaded others yet
-                if (type !== 'tractor') {
-                    console.log(`Missing ${fileName}, defaulting...`);
+        const normalizedType = (type || "").toLowerCase();
+        const candidatesByType: Record<string, string[]> =
+            context === "nft"
+                ? {
+                    auto: ["nft-auto.json", "car.json", "hero.json"],
+                    car: ["nft-auto.json", "car.json", "hero.json"],
+                    vehiculo: ["nft-auto.json", "car.json", "hero.json"],
+                    casa: ["nft-casa.json", "factory.json", "hero.json"],
+                    house: ["nft-casa.json", "factory.json", "hero.json"],
+                    departamento: ["nft-departamento.json", "factory.json", "hero.json"],
+                    inmueble: ["nft-casa.json", "nft-departamento.json", "factory.json", "hero.json"],
+                    tractor: ["nft-tractor.json", "tractor.json", "hero.json"],
+                    maquinaria: ["nft-tractor.json", "tractor.json", "hero.json"],
+                    otro: ["nft-otro.json", "hero.json"],
                 }
-            });
+                : {
+                    car: ["car.json", "hero.json"],
+                    tractor: ["tractor.json", "hero.json"],
+                    house: ["factory.json", "hero.json"],
+                    silo: ["factory.json", "hero.json"],
+                    invoice: ["factory.json", "hero.json"],
+                    art: ["factory.json", "hero.json"],
+                    farm: ["hero.json"],
+                };
+
+        const filesToTry =
+            candidatesByType[normalizedType] ||
+            (context === "nft" ? ["nft-otro.json", "hero.json"] : ["hero.json"]);
+        let cancelled = false;
+
+        const loadAnimation = async () => {
+            for (const fileName of filesToTry) {
+                try {
+                    const res = await fetch(`/lotties/${fileName}`);
+                    if (!res.ok) continue;
+                    const data = await res.json();
+                    if (!cancelled) {
+                        setAnimationData(data);
+                    }
+                    return;
+                } catch {
+                    // Try next fallback animation
+                }
+            }
+            if (!cancelled) {
+                setAnimationData(null);
+            }
+        };
+
+        loadAnimation();
+        return () => {
+            cancelled = true;
+        };
     }, [type]);
 
     if (!animationData) return null;

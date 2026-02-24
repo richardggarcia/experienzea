@@ -1,6 +1,6 @@
 export interface Asset {
   id: string;
-  type: 'vehiculo' | 'inmueble' | 'maquinaria' | 'otro';
+  type: 'auto' | 'casa' | 'departamento' | 'tractor' | 'otro' | 'vehiculo' | 'inmueble' | 'maquinaria';
   name: string;
   value: number;
   owner: string;
