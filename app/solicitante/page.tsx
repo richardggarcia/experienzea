@@ -13,6 +13,7 @@ import { Rocket, LogOut, Loader2, ArrowLeft, Plus, CheckCircle2, ShieldCheck, Tr
 import FileUpload from "@/components/FileUpload";
 import KYCModal from "@/components/KYCModal";
 import TopMetrics from "@/components/solicitante/TopMetrics";
+import AssetLottie from "@/components/AssetLottie";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSolicitanteCalculations } from "@/hooks/useSolicitanteCalculations";
 import type { Asset, LoanRequest } from "@/types/solicitante";
@@ -225,7 +226,7 @@ export default function Dashboard() {
 
     // Form State
     const [newAsset, setNewAsset] = useState<{
-        type: 'vehiculo' | 'inmueble' | 'maquinaria' | 'otro',
+        type: 'auto' | 'casa' | 'departamento' | 'tractor' | 'otro',
         name: string,
         value: string,
         owner: string,
@@ -233,12 +234,23 @@ export default function Dashboard() {
         insuranceDoc?: string,
         propertyDoc?: string
     }>({
-        type: 'vehiculo',
+        type: 'auto',
         name: '',
         value: '',
         owner: '',
         legalCheck: false
     });
+    const collateralTypeOptions: Array<{
+        value: 'auto' | 'casa' | 'departamento' | 'tractor' | 'otro';
+        label: string;
+        icon: React.ReactNode;
+    }> = [
+        { value: 'auto', label: 'Auto', icon: <Car className="w-4 h-4" /> },
+        { value: 'casa', label: 'Casa', icon: <Building2 className="w-4 h-4" /> },
+        { value: 'departamento', label: 'Departamento', icon: <Building2 className="w-4 h-4" /> },
+        { value: 'tractor', label: 'Tractor', icon: <Tractor className="w-4 h-4" /> },
+        { value: 'otro', label: 'Otro', icon: <FileText className="w-4 h-4" /> },
+    ];
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isProcess, setIsProcess] = useState<string | null>(null);
@@ -440,7 +452,7 @@ export default function Dashboard() {
             setShowForm(false);
             setTempAssetId("");
             // Mantener el nombre del owner para la próxima carga
-            setNewAsset({ type: 'vehiculo', name: '', value: '', owner: newAsset.owner, legalCheck: false });
+            setNewAsset({ type: 'auto', name: '', value: '', owner: newAsset.owner, legalCheck: false });
         } catch (error) {
             console.error('Error:', error);
             showAlert('Error guardando el activo. Intentá de nuevo.');
@@ -450,11 +462,34 @@ export default function Dashboard() {
 
     const getIcon = (type: string) => {
         switch (type) {
-            case 'maquinaria': return <Tractor className="w-8 h-8" />;
-            case 'inmueble': return <Building2 className="w-8 h-8" />;
-            case 'vehiculo': return <Car className="w-8 h-8" />;
+            case 'tractor':
+            case 'maquinaria':
+                return <Tractor className="w-8 h-8" />;
+            case 'casa':
+            case 'departamento':
+            case 'inmueble':
+                return <Building2 className="w-8 h-8" />;
+            case 'auto':
+            case 'vehiculo':
+                return <Car className="w-8 h-8" />;
             default: return <FileText className="w-8 h-8" />;
         }
+    };
+    const getAssetVisual = (asset: Asset) => {
+        const shouldAnimate =
+            asset.status === "tokenized" ||
+            asset.status === "funding_requested" ||
+            asset.status === "funded";
+
+        if (shouldAnimate) {
+            return (
+                <div className="w-full h-full pointer-events-none bg-white rounded-xl border border-white/50">
+                    <AssetLottie type={asset.type} context="nft" />
+                </div>
+            );
+        }
+
+        return getIcon(asset.type);
     };
 
     const getStatusBadge = (status: Asset['status']) => {
@@ -713,8 +748,8 @@ export default function Dashboard() {
                                         )}
 
                                         <div className="flex justify-between items-start mb-5">
-                                            <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-400">
-                                                {getIcon(asset.type)}
+                                            <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-400 overflow-hidden">
+                                                {getAssetVisual(asset)}
                                             </div>
                                             {getStatusBadge(asset.status)}
                                         </div>
@@ -1233,6 +1268,29 @@ export default function Dashboard() {
                                                 {userProfile?.full_name && (
                                                     <p className="text-xs text-blue-400 mt-1 flex items-center gap-1"><Check className="w-3 h-3" /> Completado desde tu perfil KYC</p>
                                                 )}
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-bold text-slate-400 mb-2">Tipo de Garantía</label>
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                    {collateralTypeOptions.map((option) => {
+                                                        const isSelected = newAsset.type === option.value;
+                                                        return (
+                                                            <button
+                                                                key={option.value}
+                                                                type="button"
+                                                                onClick={() => setNewAsset({ ...newAsset, type: option.value })}
+                                                                className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition-colors ${isSelected
+                                                                    ? "bg-blue-600/20 text-blue-300 border-blue-500/40"
+                                                                    : "bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-600"
+                                                                    }`}
+                                                            >
+                                                                {option.icon}
+                                                                {option.label}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
 
                                             <div>
