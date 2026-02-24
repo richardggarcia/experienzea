@@ -8,6 +8,7 @@ import {
     useGetEscrowFromIndexerByContractIds,
 } from "@trustless-work/escrow";
 import * as freighterApi from "@stellar/freighter-api";
+import * as StellarSdk from "@stellar/stellar-sdk";
 import { v4 as uuidv4 } from "uuid";
 import { Rocket, LogOut, Loader2, ArrowLeft, Plus, CheckCircle2, ShieldCheck, Tractor, Building2, Car, Coins, Check, X, AlertCircle, FileText, Upload, Pencil } from "lucide-react";
 import FileUpload from "@/components/FileUpload";
@@ -41,6 +42,14 @@ export default function Dashboard() {
         asset: null,
         accepted: false,
     });
+    const [nftModalState, setNftModalState] = useState<{
+        open: boolean;
+        asset: Asset | null;
+    }>({
+        open: false,
+        asset: null,
+    });
+    const [resolvedReceiptTokenIds, setResolvedReceiptTokenIds] = useState<Record<string, string>>({});
     const [modalState, setModalState] = useState({
         open: false,
         title: "",
@@ -60,6 +69,30 @@ export default function Dashboard() {
     const [walletBalance, setWalletBalance] = useState<number | null>(null);
     const usdcIssuer = process.env.NEXT_PUBLIC_USDC_ISSUER || "";
     const usdcSymbol = process.env.NEXT_PUBLIC_USDC_SYMBOL || "USDC";
+    const nftContractId = process.env.NEXT_PUBLIC_NFT_CONTRACT_ID || "";
+    const sorobanRpcUrl =
+        process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || "https://soroban-testnet.stellar.org";
+
+    const parseScValToNative = (raw: unknown): unknown => {
+        if (!raw) return undefined;
+
+        try {
+            return StellarSdk.scValToNative(raw as StellarSdk.xdr.ScVal);
+        } catch {
+            // noop
+        }
+
+        try {
+            if (typeof raw === "string") {
+                const scVal = StellarSdk.xdr.ScVal.fromXDR(raw, "base64");
+                return StellarSdk.scValToNative(scVal);
+            }
+        } catch {
+            // noop
+        }
+
+        return undefined;
+    };
 
     // Función para obtener balance USDC de la wallet
     const fetchWalletBalance = async (walletAddress: string) => {
@@ -360,6 +393,81 @@ export default function Dashboard() {
         }
     };
 
+    useEffect(() => {
+        const resolveReceiptTokenId = async () => {
+            const modalAsset = nftModalState.asset;
+            if (!nftModalState.open || !modalAsset || !address || !nftContractId) return;
+
+            const ownerAsset = isEscrowActionOwner(modalAsset)
+                ? modalAsset
+                : (getEscrowLeaderAsset(modalAsset) || modalAsset);
+            const ownerAssetId = ownerAsset.id;
+            const docs = ownerAsset.documents || {};
+            const receiptAssetId = docs.receipt_asset_id;
+
+            if (!receiptAssetId || docs.receipt_token_id || resolvedReceiptTokenIds[ownerAssetId]) {
+                return;
+            }
+
+            try {
+                const server = new StellarSdk.rpc.Server(sorobanRpcUrl, {
+                    allowHttp: sorobanRpcUrl.startsWith("http://"),
+                });
+                const account = await server.getAccount(address);
+                const contract = new StellarSdk.Contract(nftContractId);
+                const tx = new StellarSdk.TransactionBuilder(account, {
+                    fee: StellarSdk.BASE_FEE,
+                    networkPassphrase: testnetPassphrase,
+                })
+                    .addOperation(
+                        contract.call(
+                            "get_token_id_by_asset_id",
+                            StellarSdk.xdr.ScVal.scvString(receiptAssetId)
+                        )
+                    )
+                    .setTimeout(30)
+                    .build();
+
+                const simulated = await server.simulateTransaction(tx);
+                const retval = (simulated as any)?.result?.retval;
+                if (!retval) return;
+
+                const native = parseScValToNative(retval);
+                const resolved =
+                    typeof native === "bigint"
+                        ? native.toString()
+                        : typeof native === "number"
+                            ? String(native)
+                            : typeof native === "string"
+                                ? native
+                                : "";
+
+                if (!resolved) return;
+
+                setResolvedReceiptTokenIds((prev) => ({ ...prev, [ownerAssetId]: resolved }));
+
+                const nextDocuments = { ...(ownerAsset.documents || {}), receipt_token_id: resolved };
+                await fetch(`/api/assets/${ownerAsset.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ documents: nextDocuments }),
+                });
+            } catch (error) {
+                console.warn("No se pudo resolver receipt token id desde cadena:", error);
+            }
+        };
+
+        resolveReceiptTokenId();
+    }, [
+        nftModalState,
+        address,
+        nftContractId,
+        sorobanRpcUrl,
+        resolvedReceiptTokenIds,
+        getEscrowLeaderAsset,
+        isEscrowActionOwner,
+    ]);
+
 
     // Authentication Check
     if (isConnecting) return <div className="min-h-screen flex items-center justify-center bg-[#020617]"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
@@ -490,6 +598,25 @@ export default function Dashboard() {
         }
 
         return getIcon(asset.type);
+    };
+    const getLinkedLoanForAsset = (asset: Asset) => {
+        const contractId = asset.contractId || asset.contract_id;
+        if (contractId) {
+            return loanRequests.find((loan) => loan.contract_id === contractId) || null;
+        }
+        return loanRequests.find((loan) => (loan.asset_ids || []).includes(asset.id)) || null;
+    };
+
+    const getReceiptDataForAsset = (asset: Asset) => {
+        const leaderAsset = isEscrowActionOwner(asset)
+            ? asset
+            : (getEscrowLeaderAsset(asset) || asset);
+        return leaderAsset.documents || {};
+    };
+    const getReceiptOwnerAsset = (asset: Asset) => {
+        return isEscrowActionOwner(asset)
+            ? asset
+            : (getEscrowLeaderAsset(asset) || asset);
     };
 
     const getStatusBadge = (status: Asset['status']) => {
@@ -903,6 +1030,12 @@ export default function Dashboard() {
                                                         <strong className="text-white">{getEscrowLeaderAsset(asset)?.name || "otra garantía"}</strong>.
                                                     </p>
                                                 )}
+                                                <button
+                                                    onClick={() => setNftModalState({ open: true, asset })}
+                                                    className="w-full bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-300 py-2.5 rounded-2xl font-bold text-xs transition-colors"
+                                                >
+                                                    Ver datos NFT
+                                                </button>
                                             </div>
                                         )}
 
@@ -917,6 +1050,12 @@ export default function Dashboard() {
                                                         <strong className="text-white">{getEscrowLeaderAsset(asset)?.name || "otra garantía"}</strong>.
                                                     </p>
                                                 )}
+                                                <button
+                                                    onClick={() => setNftModalState({ open: true, asset })}
+                                                    className="w-full bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-300 py-2.5 rounded-2xl font-bold text-xs transition-colors"
+                                                >
+                                                    Ver datos NFT
+                                                </button>
                                             </div>
                                         )}
                                     </div>
@@ -1467,6 +1606,106 @@ export default function Dashboard() {
                                     Firmar y Recibir Fondos
                                 </button>
                             </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* NFT Details Modal */}
+            <AnimatePresence>
+                {nftModalState.open && nftModalState.asset && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/80 backdrop-blur-md px-4"
+                        onClick={() => setNftModalState({ open: false, asset: null })}
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full max-w-md rounded-[1.5rem] border border-white/10 bg-slate-900 shadow-2xl overflow-hidden"
+                        >
+                            {(() => {
+                                const asset = nftModalState.asset!;
+                                const linkedLoan = getLinkedLoanForAsset(asset);
+                                const contractId = asset.contractId || asset.contract_id;
+                                const ownerAsset = getReceiptOwnerAsset(asset);
+                                const receiptData = ownerAsset.documents || {};
+                                const resolvedReceiptTokenId = resolvedReceiptTokenIds[ownerAsset.id];
+                                const collateralRef = isEscrowActionOwner(asset)
+                                    ? asset.id
+                                    : (getEscrowLeaderAsset(asset)?.id || asset.id);
+                                const statusLabel = asset.status === "funded" ? "Activo" : "En proceso";
+                                const explorerUrl = contractId
+                                    ? `https://stellar.expert/explorer/testnet/contract/${contractId}`
+                                    : null;
+
+                                return (
+                                    <>
+                                        <div className="p-4 border-b border-white/[0.05]">
+                                            <h3 className="text-lg font-bold text-white font-[family-name:var(--font-syne)]">
+                                                Datos NFT del préstamo
+                                            </h3>
+                                            <p className="text-xs text-slate-400 mt-1">
+                                                {asset.name} · Titular: {asset.owner}
+                                            </p>
+                                        </div>
+
+                                        <div className="p-4 space-y-2.5 text-xs">
+                                            <div className="flex items-center justify-between border border-white/[0.05] rounded-xl px-3 py-2.5">
+                                                <span className="text-slate-400">Estado</span>
+                                                <span className="text-white font-bold">{statusLabel}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between border border-white/[0.05] rounded-xl px-3 py-2.5">
+                                                <span className="text-slate-400">Loan ID</span>
+                                                <span className="text-white font-mono">{linkedLoan?.id || "No disponible"}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between border border-white/[0.05] rounded-xl px-3 py-2.5">
+                                                <span className="text-slate-400">Colateral Ref</span>
+                                                <span className="text-white font-mono">{collateralRef}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between border border-white/[0.05] rounded-xl px-3 py-2.5">
+                                                <span className="text-slate-400">Contract ID Escrow</span>
+                                                <span className="text-white font-mono text-xs">{contractId || "No disponible"}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between border border-white/[0.05] rounded-xl px-3 py-2.5">
+                                                <span className="text-slate-400">Receipt NFT ID</span>
+                                                <span className="text-white font-mono">
+                                                    {receiptData.receipt_token_id || resolvedReceiptTokenId || "Pendiente"}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center justify-between border border-white/[0.05] rounded-xl px-3 py-2.5">
+                                                <span className="text-slate-400">Tx Hash NFT</span>
+                                                <span className="text-white font-mono text-xs">
+                                                    {receiptData.receipt_tx_hash || "Pendiente"}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-4 border-t border-white/[0.05] flex items-center justify-between gap-3">
+                                            {explorerUrl ? (
+                                                <a
+                                                    href={explorerUrl}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="text-xs text-blue-400 hover:text-blue-300 font-bold"
+                                                >
+                                                    Ver contrato en Stellar Expert
+                                                </a>
+                                            ) : <span />}
+                                            <button
+                                                onClick={() => setNftModalState({ open: false, asset: null })}
+                                                className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-500 transition-colors"
+                                            >
+                                                Cerrar
+                                            </button>
+                                        </div>
+                                    </>
+                                );
+                            })()}
                         </motion.div>
                     </motion.div>
                 )}
