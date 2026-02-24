@@ -1642,6 +1642,12 @@ export default function Dashboard() {
                                 const explorerUrl = contractId
                                     ? `https://stellar.expert/explorer/testnet/contract/${contractId}`
                                     : null;
+                                const nftTxHash = receiptData.receipt_tx_hash || "";
+                                const nftTxUrl = nftTxHash
+                                    ? `https://stellar.expert/explorer/testnet/tx/${nftTxHash}`
+                                    : null;
+                                const shorten = (value: string, start = 8, end = 6) =>
+                                    value.length > start + end ? `${value.slice(0, start)}...${value.slice(-end)}` : value;
 
                                 return (
                                     <>
@@ -1669,7 +1675,19 @@ export default function Dashboard() {
                                             </div>
                                             <div className="flex items-center justify-between border border-white/[0.05] rounded-xl px-3 py-2.5">
                                                 <span className="text-slate-400">Contract ID Escrow</span>
-                                                <span className="text-white font-mono text-xs">{contractId || "No disponible"}</span>
+                                                {explorerUrl ? (
+                                                    <a
+                                                        href={explorerUrl}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="text-blue-400 hover:text-blue-300 font-mono text-xs"
+                                                        title={contractId}
+                                                    >
+                                                        {shorten(contractId || "")}
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-white font-mono text-xs">No disponible</span>
+                                                )}
                                             </div>
                                             <div className="flex items-center justify-between border border-white/[0.05] rounded-xl px-3 py-2.5">
                                                 <span className="text-slate-400">Receipt NFT ID</span>
@@ -1679,9 +1697,19 @@ export default function Dashboard() {
                                             </div>
                                             <div className="flex items-center justify-between border border-white/[0.05] rounded-xl px-3 py-2.5">
                                                 <span className="text-slate-400">Tx Hash NFT</span>
-                                                <span className="text-white font-mono text-xs">
-                                                    {receiptData.receipt_tx_hash || "Pendiente"}
-                                                </span>
+                                                {nftTxUrl ? (
+                                                    <a
+                                                        href={nftTxUrl}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="text-blue-400 hover:text-blue-300 font-mono text-xs"
+                                                        title={nftTxHash}
+                                                    >
+                                                        {shorten(nftTxHash)}
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-white font-mono text-xs">Pendiente</span>
+                                                )}
                                             </div>
                                         </div>
 
